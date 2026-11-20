@@ -198,5 +198,5 @@ export async function fetchLeagueData(leagueId, fetchImpl = fetch) {
     owner: usersById.get(roster.owner_id) ?? null,
   }))
 
-  return { league, users, rosters, teams, playerDirectory }
+  return { league, users, rosters, teams, playerDirectory, players: playerDirectory }
 }

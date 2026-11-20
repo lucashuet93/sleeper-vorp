@@ -52,6 +52,7 @@ test('fetches league settings, owners, rosters, and player directory', async () 
   expect(result.rosters).toEqual(rosters)
   expect(result.teams[0]).toEqual({ ...rosters[0], owner: users[0] })
   expect(result.playerDirectory).toEqual(players)
+  expect(result.players).toBe(result.playerDirectory)
 })
 
 test('reports rate limits from any Sleeper endpoint', async () => {
