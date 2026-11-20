@@ -74,6 +74,92 @@ test('allocates superflex to the highest-scoring eligible position', () => {
   expect(result.players.QB2.vors).toBe(-10)
 })
 
+test('allocates superflex to quarterbacks across multiple rosters', () => {
+  const players = {
+    ...playersAt('QB', [50, 40, 30, 20]),
+    ...playersAt('RB', [35, 25, 15]),
+  }
+
+  const result = calculateVors(players, ['QB', 'SUPER_FLEX'], 2)
+
+  expect(result.replacementBaselines.QB).toEqual({
+    startersPerTeam: 1.5,
+    starterCount: 3,
+    replacementRank: 4,
+    score: 20,
+  })
+  expect(result.replacementBaselines.RB).toEqual({
+    startersPerTeam: 0.5,
+    starterCount: 1,
+    replacementRank: 2,
+    score: 25,
+  })
+  expect(result.players.QB3.vors).toBe(10)
+  expect(result.players.QB4.vors).toBe(0)
+  expect(result.players.RB1.vors).toBe(10)
+})
+
+test('reassigns an earlier running back to free an overlapping flex slot', () => {
+  const players = {
+    ...playersAt('RB', [100, 1]),
+    ...playersAt('TE', [90, 0]),
+  }
+
+  const result = calculateVors(players, ['FLEX', 'WRRB_FLEX'], 1)
+
+  expect(result.replacementBaselines.RB).toEqual({
+    startersPerTeam: 1,
+    starterCount: 1,
+    replacementRank: 2,
+    score: 1,
+  })
+  expect(result.replacementBaselines.TE).toEqual({
+    startersPerTeam: 1,
+    starterCount: 1,
+    replacementRank: 2,
+    score: 0,
+  })
+  expect(result.players.RB1.vors).toBe(99)
+  expect(result.players.RB2.vors).toBe(0)
+  expect(result.players.TE1.vors).toBe(90)
+})
+
+test('keeps shared-slot allocation independent of roster setting order', () => {
+  const players = {
+    ...playersAt('QB', [3, 2, 0]),
+    ...playersAt('RB', [4, 3, 0]),
+    ...playersAt('WR', [3, 2, 2]),
+    ...playersAt('TE', [4, 2, 1]),
+  }
+  const rosterSettings = ['REC_FLEX', 'WRRB_FLEX', 'SUPER_FLEX']
+
+  const result = calculateVors(players, rosterSettings, 1)
+  const reversedResult = calculateVors(players, [...rosterSettings].reverse(), 1)
+
+  expect(reversedResult.replacementBaselines).toEqual(result.replacementBaselines)
+  expect(reversedResult.players).toEqual(result.players)
+})
+
+test('normalizes lowercase player positions', () => {
+  const players = {
+    qb1: { position: 'qb', fantasyPoints: 30 },
+    qb2: { position: 'qb', fantasyPoints: 20 },
+    qb3: { position: 'qb', fantasyPoints: 10 },
+  }
+
+  const result = calculateVors(players, ['QB'], 1, 'fantasyPoints')
+
+  expect(result.replacementBaselines.QB).toEqual({
+    startersPerTeam: 1,
+    starterCount: 1,
+    replacementRank: 2,
+    score: 20,
+  })
+  expect(result.players.qb1.vors).toBe(10)
+  expect(result.players.qb2.vors).toBe(0)
+  expect(result.players.qb3.vors).toBe(-10)
+})
+
 test('terminates shared-slot allocation with decimal projections', () => {
   const players = {
     ...playersAt('RB', [76.7, 76.7]),
@@ -136,16 +222,16 @@ test('counts eligible flex slots, excludes bench slots, and leaves unsupported b
   )
 
   expect(result.replacementBaselines.RB).toEqual({
-    startersPerTeam: 2,
-    starterCount: 2,
-    replacementRank: 3,
-    score: 20,
-  })
-  expect(result.replacementBaselines.WR).toEqual({
     startersPerTeam: 3,
     starterCount: 3,
     replacementRank: 4,
     score: 15,
+  })
+  expect(result.replacementBaselines.WR).toEqual({
+    startersPerTeam: 2,
+    starterCount: 2,
+    replacementRank: 3,
+    score: 20,
   })
   expect(result.replacementBaselines.TE).toEqual({
     startersPerTeam: 1,
@@ -154,7 +240,7 @@ test('counts eligible flex slots, excludes bench slots, and leaves unsupported b
     score: 15,
   })
   expect(result.replacementBaselines.QB.score).toBeNull()
-  expect(result.players.RB1.vors).toBe(10)
+  expect(result.players.RB1.vors).toBe(15)
 })
 
 test('leaves VORS null when no replacement player is available', () => {

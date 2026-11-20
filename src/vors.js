@@ -54,6 +54,7 @@ function allocateSharedStarters(
   scoreField,
 ) {
   const sharedSlots = Object.entries(starterConfiguration.sharedSlots)
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
     .map(([slot, count]) => ({
       positions: STARTER_SLOT_POSITIONS[slot],
       count: count * totalRosters,
@@ -169,10 +170,13 @@ export function calculateVors(
     SUPPORTED_POSITIONS.map((position) => [
       position,
       Object.entries(players)
-        .filter(([, player]) =>
-          player?.position === position &&
-          Number.isFinite(player[scoreField]),
-        )
+        .filter(([, player]) => {
+          const playerPosition = typeof player?.position === 'string'
+            ? player.position.toUpperCase()
+            : ''
+          return playerPosition === position &&
+            Number.isFinite(player[scoreField])
+        })
         .sort(([, left], [, right]) => right[scoreField] - left[scoreField]),
     ]),
   )
