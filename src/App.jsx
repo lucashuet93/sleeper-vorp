@@ -179,7 +179,7 @@ function App() {
           <p>Season: {confirmedSelection.season}</p>
           <p>League ID: {confirmedSelection.leagueId}</p>
           <p>Teams: {leagueData.teams.length}</p>
-          <p>Players loaded: {Object.keys(leagueData.players).length}</p>
+          <p>Player directory entries: {Object.keys(leagueData.playerDirectory).length}</p>
         </section>
       )}
     </>

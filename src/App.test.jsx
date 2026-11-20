@@ -164,7 +164,7 @@ test('loads selected league data and reports a rate-limit error', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
 
   expect(await screen.findByText('Teams: 1')).toBeTruthy()
-  expect(screen.getByText('Players loaded: 1')).toBeTruthy()
+  expect(screen.getByText('Player directory entries: 1')).toBeTruthy()
   expect(global.fetch).toHaveBeenCalledWith(
     'https://api.sleeper.app/v1/league/league-123/rosters',
   )
