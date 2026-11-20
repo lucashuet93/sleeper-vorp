@@ -16,6 +16,9 @@ beforeEach(() => {
 test('finds leagues, lets the user choose a season, and confirms the selection', async () => {
   const currentSeason = new Date().getFullYear()
   global.fetch.mockImplementation((url) => {
+    if (url.endsWith('/state/nfl')) {
+      return Promise.resolve(response({ season: String(currentSeason) }))
+    }
     if (url.endsWith('/user/football-fan')) {
       return Promise.resolve(response({ user_id: 'user-123' }))
     }
@@ -27,7 +30,7 @@ test('finds leagues, lets the user choose a season, and confirms the selection',
       if (url.endsWith('/rosters')) {
         return Promise.resolve(response([{ roster_id: 1, owner_id: 'user-123' }]))
       }
-      return Promise.resolve(response({ league_id: 'league-previous' }))
+      return Promise.resolve(response({ league_id: 'league-current', season: String(currentSeason) }))
     }
     if (url.endsWith('/players/nfl')) {
       return Promise.resolve(response({}))
@@ -75,14 +78,14 @@ test('finds leagues, lets the user choose a season, and confirms the selection',
   const continueButton = screen.getByRole('button', { name: 'Continue' })
   expect(continueButton.disabled).toBe(true)
   fireEvent.change(seasonSelect, {
-    target: { value: String(currentSeason - 1) },
+    target: { value: String(currentSeason) },
   })
   expect(continueButton.disabled).toBe(false)
   fireEvent.click(continueButton)
 
   expect(await screen.findByRole('region', { name: 'Next step' })).toBeTruthy()
-  expect(screen.getByText('Season: ' + (currentSeason - 1))).toBeTruthy()
-  expect(screen.getByText('League ID: league-previous')).toBeTruthy()
+  expect(screen.getByText('Season: ' + currentSeason)).toBeTruthy()
+  expect(screen.getByText('League ID: league-current')).toBeTruthy()
 })
 
 test('shows a helpful message when the username has no leagues', async () => {
@@ -124,6 +127,7 @@ test('shows an error when the username is not found', async () => {
 test('loads selected league data and reports a rate-limit error', async () => {
   const currentSeason = String(new Date().getFullYear())
   global.fetch.mockImplementation((url) => {
+    if (url.endsWith('/state/nfl')) return Promise.resolve(response({ season: currentSeason }))
     if (url.endsWith('/user/fan')) {
       return Promise.resolve(response({ user_id: 'user-123' }))
     }
@@ -170,6 +174,31 @@ test('loads selected league data and reports a rate-limit error', async () => {
   )
 })
 
+test('explains why a historical league cannot be loaded', async () => {
+  const currentSeason = new Date().getFullYear()
+  const historicalSeason = String(currentSeason - 1)
+  global.fetch.mockImplementation((url) => {
+    if (url.endsWith('/user/fan')) return Promise.resolve(response({ user_id: 'user-123' }))
+    if (url.endsWith(`/user/user-123/leagues/nfl/${historicalSeason}`)) {
+      return Promise.resolve(response([{ league_id: 'old', name: 'League', season: historicalSeason }]))
+    }
+    if (url.endsWith('/league/old')) return Promise.resolve(response({ league_id: 'old', season: historicalSeason }))
+    if (url.endsWith('/state/nfl')) return Promise.resolve(response({ season: String(currentSeason) }))
+    return Promise.resolve(response([]))
+  })
+
+  render(<App />)
+  fireEvent.change(screen.getByLabelText('Sleeper username'), { target: { value: 'fan' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Find leagues' }))
+  fireEvent.change(await screen.findByLabelText('League'), { target: { value: 'old' } })
+  fireEvent.change(screen.getByLabelText('Season'), { target: { value: historicalSeason } })
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+
+  expect((await screen.findByRole('alert')).textContent).toMatch(/Player eligibility is unavailable/)
+  expect(screen.queryByRole('region', { name: 'Next step' })).toBeNull()
+  expect(global.fetch.mock.calls.some(([url]) => url.endsWith('/players/nfl'))).toBe(false)
+})
+
 test('shows a friendly message when selected league data is rate limited', async () => {
   const currentSeason = String(new Date().getFullYear())
   global.fetch.mockImplementation((url) => {
@@ -211,6 +240,7 @@ test.each(['success', 'failure'])('ignores a stale league load after changing se
   let finishOld
   let finishNew
   global.fetch.mockImplementation((url) => {
+    if (url.endsWith('/state/nfl')) return Promise.resolve(response({ season: String(currentSeason - 1) }))
     if (url.endsWith('/user/fan')) return Promise.resolve(response({ user_id: 'user-123' }))
     if (url.includes('/user/user-123/leagues/nfl/')) {
       const season = Number(url.split('/').pop())

@@ -178,6 +178,17 @@ export async function fetchLeagueData(leagueId, fetchImpl = fetch) {
     throw new Error('request_failed')
   }
 
+  const nflState = await fetchJson(`${API_BASE_URL}/state/nfl`, fetchImpl)
+  if (
+    typeof league.season !== 'string' || !/^\d{4}$/.test(league.season) ||
+    typeof nflState?.season !== 'string' || !/^\d{4}$/.test(nflState.season)
+  ) {
+    throw new Error('request_failed')
+  }
+  if (league.season !== nflState.season) {
+    throw new Error('unsupported_season')
+  }
+
   const [users, rosters, playerDirectory] = await Promise.all([
     fetchJson(`${API_BASE_URL}/league/${encodeURIComponent(leagueId)}/users`, fetchImpl),
     fetchJson(`${API_BASE_URL}/league/${encodeURIComponent(leagueId)}/rosters`, fetchImpl),
@@ -198,5 +209,5 @@ export async function fetchLeagueData(leagueId, fetchImpl = fetch) {
     owner: usersById.get(roster.owner_id) ?? null,
   }))
 
-  return { league, users, rosters, teams, playerDirectory, players: playerDirectory }
+  return { league, users, rosters, teams, playerDirectory, players: playerDirectory, playerPool: null }
 }

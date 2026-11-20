@@ -19,6 +19,7 @@ test('fetches league settings, owners, rosters, and player directory', async () 
   const rosters = [{ roster_id: 1, owner_id: 'user-123', players: ['player-1'] }]
   const players = { 'player-1': { full_name: 'Player One' } }
   const fetchImpl = jest.fn((url) => {
+    if (url.endsWith('/state/nfl')) return Promise.resolve(response({ season: '2025' }))
     if (url.endsWith('/league/league-123')) {
       return Promise.resolve(response(league))
     }
@@ -33,7 +34,7 @@ test('fetches league settings, owners, rosters, and player directory', async () 
 
   const result = await fetchLeagueData('league-123', fetchImpl)
 
-  expect(fetchImpl).toHaveBeenCalledTimes(4)
+  expect(fetchImpl).toHaveBeenCalledTimes(5)
   expect(fetchImpl).toHaveBeenCalledWith(
     'https://api.sleeper.app/v1/league/league-123',
   )
@@ -53,6 +54,33 @@ test('fetches league settings, owners, rosters, and player directory', async () 
   expect(result.teams[0]).toEqual({ ...rosters[0], owner: users[0] })
   expect(result.playerDirectory).toEqual(players)
   expect(result.players).toBe(result.playerDirectory)
+  expect(result.playerPool).toBeNull()
+})
+
+test.each(['2020', '2026'])('rejects unsupported season %s before fetching dependent data', async (season) => {
+  const fetchImpl = jest.fn((url) => Promise.resolve(response(
+    url.endsWith('/state/nfl') ? { season: '2025' } : { league_id: 'league', season },
+  )))
+
+  await expect(fetchLeagueData('league', fetchImpl)).rejects.toThrow('unsupported_season')
+  expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual([
+    'https://api.sleeper.app/v1/league/league',
+    'https://api.sleeper.app/v1/state/nfl',
+  ])
+})
+
+test.each([
+  [{}, { season: '2025' }],
+  [{ season: '2025' }, {}],
+  [{ season: '2025' }, null],
+  [{ season: 2025 }, { season: 2025 }],
+])('rejects missing season metadata instead of assuming eligibility', async (league, state) => {
+  const fetchImpl = jest.fn((url) => Promise.resolve(response(
+    url.endsWith('/state/nfl') ? state : league,
+  )))
+
+  await expect(fetchLeagueData('league', fetchImpl)).rejects.toThrow('request_failed')
+  expect(fetchImpl).toHaveBeenCalledTimes(2)
 })
 
 test('reports rate limits from any Sleeper endpoint', async () => {
@@ -95,10 +123,14 @@ test('normalizes network errors for a user-friendly message', async () => {
 
 test('reuses an in-flight directory request and caches it across leagues and retries', async () => {
   let finishPlayers
+  let markPlayersStarted
+  const playersStarted = new Promise((resolve) => { markPlayersStarted = resolve })
   let failUsers = true
   const players = { p1: { full_name: 'Player One' } }
   const fetchImpl = jest.fn((url) => {
+    if (url.endsWith('/state/nfl')) return Promise.resolve(response({ season: '2025' }))
     if (url.endsWith('/players/nfl')) {
+      markPlayersStarted()
       return new Promise((resolve) => { finishPlayers = resolve })
     }
     if (url.endsWith('/users')) {
@@ -111,9 +143,7 @@ test('reuses an in-flight directory request and caches it across leagues and ret
   const first = fetchLeagueData('one', fetchImpl)
   const second = fetchLeagueData('two', fetchImpl)
   const failed = Promise.allSettled([first, second])
-  await Promise.resolve()
-  await Promise.resolve()
-  await Promise.resolve()
+  await playersStarted
   expect(fetchImpl.mock.calls.filter(([url]) => url.endsWith('/players/nfl'))).toHaveLength(1)
   finishPlayers(response(players))
   expect((await failed).map((result) => result.status)).toEqual(['rejected', 'rejected'])
@@ -127,6 +157,7 @@ test('expires the player cache after one day and retries failed downloads', asyn
   const clock = jest.spyOn(Date, 'now').mockImplementation(() => now)
   let playerCalls = 0
   const fetchImpl = jest.fn((url) => {
+    if (url.endsWith('/state/nfl')) return Promise.resolve(response({ season: '2025' }))
     if (url.endsWith('/players/nfl')) {
       playerCalls += 1
       return Promise.resolve(response(playerCalls === 2 ? null : { p1: {} }))
@@ -166,6 +197,7 @@ test('persists the player directory across fetch instances when browser cache is
     async json() { return JSON.parse(this.body) }
   }
   const makeFetch = () => jest.fn((url) => {
+    if (url.endsWith('/state/nfl')) return Promise.resolve(response({ season: '2025' }))
     if (url.endsWith('/players/nfl')) return Promise.resolve(response({ p1: {} }))
     if (url.endsWith('/users') || url.endsWith('/rosters')) return Promise.resolve(response([]))
     return Promise.resolve(response({ league_id: 'league', season: '2025' }))

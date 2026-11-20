@@ -193,6 +193,9 @@ function getErrorMessage(error, resource) {
   if (error.message === 'league_not_found') {
     return 'That Sleeper league could not be found. Select another league and try again.'
   }
+  if (error.message === 'unsupported_season') {
+    return 'Player eligibility is unavailable for this season. Please select the current Sleeper NFL season.'
+  }
   if (error.message === 'rate_limited') {
     return 'Sleeper is rate-limiting requests. Please wait a moment and try again.'
   }
