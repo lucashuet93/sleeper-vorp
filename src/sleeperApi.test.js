@@ -36,7 +36,7 @@ function mockApi(overrides = {}) {
   })
 }
 
-test('returns selected league settings, owners, rosters and the player directory', async () => {
+test('returns selected league settings, owners, rosters and the labeled player directory', async () => {
   const fetchImpl = mockApi()
   const data = await fetchLeagueData('123', season, { fetchImpl })
   expect(data).toEqual({
@@ -45,10 +45,82 @@ test('returns selected league settings, owners, rosters and the player directory
     rosterSettings: ['QB', 'SUPER_FLEX', 'BN'],
     users: [{ user_id: 'owner' }],
     rosters: [{ owner_id: 'owner', players: ['p1'] }],
-    players: { p1: { player_id: 'p1', position: 'QB' } },
-    playerDirectory: { p1: { player_id: 'p1', position: 'QB' } },
+    players: {
+      p1: {
+        player_id: 'p1',
+        position: 'QB',
+        rosterStatus: 'rostered',
+        roster: {
+          rosterId: null,
+          ownerId: 'owner',
+          owner: { user_id: 'owner' },
+        },
+      },
+    },
+    playerDirectory: {
+      p1: {
+        player_id: 'p1',
+        position: 'QB',
+        rosterStatus: 'rostered',
+        roster: {
+          rosterId: null,
+          ownerId: 'owner',
+          owner: { user_id: 'owner' },
+        },
+      },
+    },
   })
   expect(data.players).toBe(data.playerDirectory)
+})
+
+test('labels rostered players with their owner and marks all other players as free agents', async () => {
+  const owner = { user_id: 'owner-1', display_name: 'Team Owner' }
+  const fetchImpl = mockApi({
+    [`${base}/league/123/users`]: [owner],
+    [`${base}/league/123/rosters`]: [{
+      roster_id: 7,
+      owner_id: owner.user_id,
+      players: ['p1'],
+      reserve: ['p2'],
+      taxi: ['p3'],
+    }],
+    [`${base}/players/nfl`]: {
+      p1: { player_id: 'p1', position: 'QB' },
+      p2: { player_id: 'p2', position: 'RB' },
+      p3: { player_id: 'p3', position: 'WR' },
+      p4: { player_id: 'p4', position: 'TE' },
+    },
+  })
+
+  const { players, playerDirectory } = await fetchLeagueData('123', season, { fetchImpl })
+
+  expect(players).toEqual({
+    p1: {
+      player_id: 'p1',
+      position: 'QB',
+      rosterStatus: 'rostered',
+      roster: { rosterId: 7, ownerId: 'owner-1', owner },
+    },
+    p2: {
+      player_id: 'p2',
+      position: 'RB',
+      rosterStatus: 'rostered',
+      roster: { rosterId: 7, ownerId: 'owner-1', owner },
+    },
+    p3: {
+      player_id: 'p3',
+      position: 'WR',
+      rosterStatus: 'rostered',
+      roster: { rosterId: 7, ownerId: 'owner-1', owner },
+    },
+    p4: {
+      player_id: 'p4',
+      position: 'TE',
+      rosterStatus: 'free_agent',
+      roster: null,
+    },
+  })
+  expect(playerDirectory).toBe(players)
 })
 
 test('loads available historical league data but rejects the global player pool', async () => {
@@ -143,8 +215,10 @@ test('refreshes the directory after a season transition and shares the new downl
   expect(fetchImpl.mock.calls.filter(([url]) => url.endsWith('/players/nfl'))).toHaveLength(2)
   pending.resolve(response({ new: {} }))
   const results = await Promise.all([first, second])
-  expect(results[0].players).toEqual({ new: {} })
-  expect(results[1].players).toBe(results[0].players)
+  expect(results[0].players).toEqual({
+    new: { rosterStatus: 'free_agent', roster: null },
+  })
+  expect(results[1].players).toEqual(results[0].players)
   await expect(fetchLeagueData('123', '2026', { fetchImpl })).resolves.toHaveProperty('players.new')
   expect(fetchImpl.mock.calls.filter(([url]) => url.endsWith('/players/nfl'))).toHaveLength(2)
 })
