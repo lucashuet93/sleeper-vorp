@@ -53,6 +53,8 @@ Errors are `Error` objects with these `message` codes:
   or a league whose season does not match the selection.
 - `request_cancelled`: the supplied abort signal was triggered.
 
-The loaded object is held in `App` state alongside the confirmed selection for
-future downstream UI. Changing the username or selection invalidates pending
-loads so old results cannot replace the new selection.
+The loaded object is also exposed to descendants of `App` through the exported
+`LeagueDataContext`: use `useContext(LeagueDataContext)` to access it. Its value
+is `null` until loading succeeds and is cleared when the selection changes.
+Changing the username or selection invalidates pending loads so old results
+cannot replace the new selection.

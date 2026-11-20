@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { createContext, useEffect, useRef, useState } from 'react'
 import { fetchLeagueData, fetchLeaguesForUsername } from './sleeperApi.js'
+
+export const LeagueDataContext = createContext(null)
 
 function App() {
   const [username, setUsername] = useState('')
@@ -106,7 +108,7 @@ function App() {
   }
 
   return (
-    <>
+    <LeagueDataContext.Provider value={leagueData}>
       <h1>Sleeper VORP</h1>
       <form onSubmit={handleSubmit}>
         <label htmlFor="sleeper-username">Sleeper username</label>
@@ -199,7 +201,7 @@ function App() {
           <p>League ID: {confirmedSelection.leagueId}</p>
         </section>
       )}
-    </>
+    </LeagueDataContext.Provider>
   )
 }
 

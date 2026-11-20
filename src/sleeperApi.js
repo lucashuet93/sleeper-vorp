@@ -155,6 +155,21 @@ function getPlayerDirectory(fetchImpl) {
   return request
 }
 
+async function waitForPlayerDirectory(fetchImpl, signal) {
+  if (!signal) return getPlayerDirectory(fetchImpl)
+  if (signal.aborted) throw requestError('request_cancelled')
+  let onAbort
+  const cancelled = new Promise((_, reject) => {
+    onAbort = () => reject(requestError('request_cancelled'))
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+  try {
+    return await Promise.race([getPlayerDirectory(fetchImpl), cancelled])
+  } finally {
+    signal.removeEventListener('abort', onAbort)
+  }
+}
+
 export async function fetchLeagueData(leagueId, season, { fetchImpl = fetch, signal } = {}) {
   const leagueUrl = `${API_BASE_URL}/league/${encodeURIComponent(leagueId)}`
   const league = await requestJson(leagueUrl, fetchImpl, { signal, league: true })
@@ -174,7 +189,7 @@ export async function fetchLeagueData(leagueId, season, { fetchImpl = fetch, sig
   if (String(state.season) !== String(season)) throw requestError('unsupported_season')
   if (!Array.isArray(users) || !Array.isArray(rosters)) throw requestError('request_failed')
 
-  const players = await getPlayerDirectory(fetchImpl)
+  const players = await waitForPlayerDirectory(fetchImpl, signal)
   if (signal?.aborted) throw requestError('request_cancelled')
   return {
     league,

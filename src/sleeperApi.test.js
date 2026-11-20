@@ -134,3 +134,27 @@ test('does not cache an empty or failed player directory', async () => {
   await expect(fetchLeagueData('123', season, { fetchImpl })).resolves.toHaveProperty('players.p1')
   expect(playerRequests).toBe(2)
 })
+
+test('cancels a directory waiter promptly without aborting the shared download', async () => {
+  const pending = deferred()
+  const started = deferred()
+  const fetchImpl = mockApi()
+  const normal = fetchImpl.getMockImplementation()
+  fetchImpl.mockImplementation((url, options) => {
+    if (url.endsWith('/players/nfl')) {
+      started.resolve(options.signal)
+      return pending.promise
+    }
+    return normal(url, options)
+  })
+  const controller = new AbortController()
+  const first = fetchLeagueData('123', season, { fetchImpl, signal: controller.signal })
+  const downloadSignal = await started.promise
+  const second = fetchLeagueData('123', season, { fetchImpl })
+  controller.abort()
+  await expect(first).rejects.toThrow('request_cancelled')
+  expect(downloadSignal.aborted).toBe(false)
+  pending.resolve(response({ p1: {} }))
+  await expect(second).resolves.toHaveProperty('players.p1')
+  expect(fetchImpl.mock.calls.filter(([url]) => url.endsWith('/players/nfl'))).toHaveLength(1)
+})
