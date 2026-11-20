@@ -1,19 +1,38 @@
 const API_BASE_URL = 'https://api.sleeper.app/v1'
 const FIRST_NFL_SEASON = 2017
 
-export async function fetchLeaguesForUsername(username, fetchImpl = fetch) {
-  const userResponse = await fetchImpl(
-    `${API_BASE_URL}/user/${encodeURIComponent(username)}`,
-  )
-
-  if (userResponse.status === 404) {
-    throw new Error('user_not_found')
-  }
-  if (!userResponse.ok) {
+async function fetchJson(url, fetchImpl, notFoundError = 'request_failed') {
+  let response
+  try {
+    response = await fetchImpl(url)
+  } catch {
     throw new Error('request_failed')
   }
 
-  const user = await userResponse.json()
+  if (response.status === 429) {
+    throw new Error('rate_limited')
+  }
+  if (response.status === 404) {
+    throw new Error(notFoundError)
+  }
+  if (!response.ok) {
+    throw new Error('request_failed')
+  }
+
+  try {
+    return await response.json()
+  } catch {
+    throw new Error('request_failed')
+  }
+}
+
+export async function fetchLeaguesForUsername(username, fetchImpl = fetch) {
+  const user = await fetchJson(
+    `${API_BASE_URL}/user/${encodeURIComponent(username)}`,
+    fetchImpl,
+    'user_not_found',
+  )
+
   if (!user?.user_id) {
     throw new Error('user_not_found')
   }
@@ -25,13 +44,10 @@ export async function fetchLeaguesForUsername(username, fetchImpl = fetch) {
   )
   const leagueLists = await Promise.all(
     seasons.map(async (season) => {
-      const response = await fetchImpl(
+      return fetchJson(
         `${API_BASE_URL}/user/${user.user_id}/leagues/nfl/${season}`,
+        fetchImpl,
       )
-      if (!response.ok) {
-        throw new Error('request_failed')
-      }
-      return response.json()
     }),
   )
 
@@ -80,4 +96,33 @@ export async function fetchLeaguesForUsername(username, fetchImpl = fetch) {
       ].sort((left, right) => Number(right.season) - Number(left.season)),
     }))
     .sort((left, right) => left.name.localeCompare(right.name))
+}
+
+export async function fetchLeagueData(leagueId, fetchImpl = fetch) {
+  const [league, users, rosters, players] = await Promise.all([
+    fetchJson(`${API_BASE_URL}/league/${encodeURIComponent(leagueId)}`, fetchImpl, 'league_not_found'),
+    fetchJson(`${API_BASE_URL}/league/${encodeURIComponent(leagueId)}/users`, fetchImpl),
+    fetchJson(`${API_BASE_URL}/league/${encodeURIComponent(leagueId)}/rosters`, fetchImpl),
+    fetchJson(`${API_BASE_URL}/players/nfl`, fetchImpl),
+  ])
+
+  if (
+    !league ||
+    typeof league !== 'object' ||
+    !Array.isArray(users) ||
+    !Array.isArray(rosters) ||
+    !players ||
+    typeof players !== 'object' ||
+    Array.isArray(players)
+  ) {
+    throw new Error('request_failed')
+  }
+
+  const usersById = new Map(users.map((user) => [user.user_id, user]))
+  const teams = rosters.map((roster) => ({
+    ...roster,
+    owner: usersById.get(roster.owner_id) ?? null,
+  }))
+
+  return { league, users, rosters, teams, players }
 }

@@ -20,6 +20,19 @@ test('finds leagues, lets the user choose a season, and confirms the selection',
       return Promise.resolve(response({ user_id: 'user-123' }))
     }
 
+    if (url.includes('/league/')) {
+      if (url.endsWith('/users')) {
+        return Promise.resolve(response([{ user_id: 'user-123' }]))
+      }
+      if (url.endsWith('/rosters')) {
+        return Promise.resolve(response([{ roster_id: 1, owner_id: 'user-123' }]))
+      }
+      return Promise.resolve(response({ league_id: 'league-previous' }))
+    }
+    if (url.endsWith('/players/nfl')) {
+      return Promise.resolve(response({}))
+    }
+
     const season = Number(url.split('/').pop())
     return Promise.resolve(
       response(
@@ -67,7 +80,7 @@ test('finds leagues, lets the user choose a season, and confirms the selection',
   expect(continueButton.disabled).toBe(false)
   fireEvent.click(continueButton)
 
-  expect(screen.getByRole('region', { name: 'Next step' })).toBeTruthy()
+  expect(await screen.findByRole('region', { name: 'Next step' })).toBeTruthy()
   expect(screen.getByText('Season: ' + (currentSeason - 1))).toBeTruthy()
   expect(screen.getByText('League ID: league-previous')).toBeTruthy()
 })
@@ -106,4 +119,89 @@ test('shows an error when the username is not found', async () => {
       /No Sleeper account found/,
     )
   })
+})
+
+test('loads selected league data and reports a rate-limit error', async () => {
+  const currentSeason = String(new Date().getFullYear())
+  global.fetch.mockImplementation((url) => {
+    if (url.endsWith('/user/fan')) {
+      return Promise.resolve(response({ user_id: 'user-123' }))
+    }
+    if (url.endsWith(`/user/user-123/leagues/nfl/${currentSeason}`)) {
+      return Promise.resolve(
+        response([{ league_id: 'league-123', name: 'Friends League', season: currentSeason }]),
+      )
+    }
+    if (url.endsWith('/league/league-123')) {
+      return Promise.resolve(
+        response({ league_id: 'league-123', season: currentSeason }),
+      )
+    }
+    if (url.endsWith('/league/league-123/users')) {
+      return Promise.resolve(response([{ user_id: 'user-123' }]))
+    }
+    if (url.endsWith('/league/league-123/rosters')) {
+      return Promise.resolve(response([{ roster_id: 1, owner_id: 'user-123' }]))
+    }
+    if (url.endsWith('/players/nfl')) {
+      return Promise.resolve(response({ player: { full_name: 'A Player' } }))
+    }
+    return Promise.resolve(response([]))
+  })
+
+  render(<App />)
+  fireEvent.change(screen.getByLabelText('Sleeper username'), {
+    target: { value: 'fan' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Find leagues' }))
+
+  fireEvent.change(await screen.findByRole('combobox', { name: 'League' }), {
+    target: { value: 'league-123' },
+  })
+  fireEvent.change(screen.getByRole('combobox', { name: 'Season' }), {
+    target: { value: currentSeason },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+
+  expect(await screen.findByText('Teams: 1')).toBeTruthy()
+  expect(screen.getByText('Players loaded: 1')).toBeTruthy()
+  expect(global.fetch).toHaveBeenCalledWith(
+    'https://api.sleeper.app/v1/league/league-123/rosters',
+  )
+})
+
+test('shows a friendly message when selected league data is rate limited', async () => {
+  const currentSeason = String(new Date().getFullYear())
+  global.fetch.mockImplementation((url) => {
+    if (url.endsWith('/user/fan')) {
+      return Promise.resolve(response({ user_id: 'user-123' }))
+    }
+    if (url.endsWith(`/user/user-123/leagues/nfl/${currentSeason}`)) {
+      return Promise.resolve(
+        response([{ league_id: 'league-123', name: 'Friends League', season: currentSeason }]),
+      )
+    }
+    if (url.endsWith('/league/league-123')) {
+      return Promise.resolve(response(null, 429))
+    }
+    return Promise.resolve(response([]))
+  })
+
+  render(<App />)
+  fireEvent.change(screen.getByLabelText('Sleeper username'), {
+    target: { value: 'fan' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Find leagues' }))
+
+  fireEvent.change(await screen.findByRole('combobox', { name: 'League' }), {
+    target: { value: 'league-123' },
+  })
+  fireEvent.change(screen.getByRole('combobox', { name: 'Season' }), {
+    target: { value: currentSeason },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+
+  expect((await screen.findByRole('alert')).textContent).toMatch(
+    /Sleeper is rate-limiting requests/,
+  )
 })

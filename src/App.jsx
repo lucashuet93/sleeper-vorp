@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { fetchLeaguesForUsername } from './sleeperApi.js'
+import { fetchLeagueData, fetchLeaguesForUsername } from './sleeperApi.js'
 
 function App() {
   const [username, setUsername] = useState('')
@@ -7,8 +7,10 @@ function App() {
   const [selectedLeagueId, setSelectedLeagueId] = useState('')
   const [selectedSeason, setSelectedSeason] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingLeagueData, setLoadingLeagueData] = useState(false)
   const [error, setError] = useState('')
   const [confirmedSelection, setConfirmedSelection] = useState(null)
+  const [leagueData, setLeagueData] = useState(null)
   const [hasSearched, setHasSearched] = useState(false)
 
   const selectedLeague = leagues.find(
@@ -26,6 +28,7 @@ function App() {
     setSelectedLeagueId('')
     setSelectedSeason('')
     setConfirmedSelection(null)
+    setLeagueData(null)
     setHasSearched(false)
 
     try {
@@ -34,25 +37,35 @@ function App() {
       setHasSearched(true)
     } catch (requestError) {
       setError(
-        requestError.message === 'user_not_found'
-          ? 'No Sleeper account found for that username. Check the spelling and try again.'
-          : 'Unable to load leagues right now. Please try again.',
+        getErrorMessage(requestError, 'leagues'),
       )
     } finally {
       setLoading(false)
     }
   }
 
-  function handleContinue() {
+  async function handleContinue() {
     if (!selectedLeague || !selectedSeasonRecord) {
       return
     }
 
-    setConfirmedSelection({
-      leagueId: selectedSeasonRecord.league_id,
-      leagueName: selectedLeague.name,
-      season: selectedSeasonRecord.season,
-    })
+    setLoadingLeagueData(true)
+    setError('')
+    setLeagueData(null)
+    setConfirmedSelection(null)
+    try {
+      const data = await fetchLeagueData(selectedSeasonRecord.league_id)
+      setLeagueData(data)
+      setConfirmedSelection({
+        leagueId: selectedSeasonRecord.league_id,
+        leagueName: selectedLeague.name,
+        season: selectedSeasonRecord.season,
+      })
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, 'league data'))
+    } finally {
+      setLoadingLeagueData(false)
+    }
   }
 
   return (
@@ -87,6 +100,8 @@ function App() {
               setSelectedLeagueId(event.target.value)
               setSelectedSeason('')
               setConfirmedSelection(null)
+              setLeagueData(null)
+              setError('')
             }}
           >
             <option value="">Select a league</option>
@@ -106,6 +121,8 @@ function App() {
                 onChange={(event) => {
                   setSelectedSeason(event.target.value)
                   setConfirmedSelection(null)
+                  setLeagueData(null)
+                  setError('')
                 }}
               >
                 <option value="">Select a season</option>
@@ -123,13 +140,15 @@ function App() {
 
           <button
             type="button"
-            disabled={!selectedLeague || !selectedSeasonRecord}
+            disabled={!selectedLeague || !selectedSeasonRecord || loadingLeagueData}
             onClick={handleContinue}
           >
-            Continue
+            {loadingLeagueData ? 'Loading league data…' : 'Continue'}
           </button>
         </section>
       )}
+
+      {loadingLeagueData && <p role="status">Loading league data from Sleeper…</p>}
 
       {confirmedSelection && (
         <section aria-label="Next step">
@@ -137,10 +156,25 @@ function App() {
           <p>League: {confirmedSelection.leagueName}</p>
           <p>Season: {confirmedSelection.season}</p>
           <p>League ID: {confirmedSelection.leagueId}</p>
+          <p>Teams: {leagueData.teams.length}</p>
+          <p>Players loaded: {Object.keys(leagueData.players).length}</p>
         </section>
       )}
     </>
   )
+}
+
+function getErrorMessage(error, resource) {
+  if (error.message === 'user_not_found') {
+    return 'No Sleeper account found for that username. Check the spelling and try again.'
+  }
+  if (error.message === 'league_not_found') {
+    return 'That Sleeper league could not be found. Select another league and try again.'
+  }
+  if (error.message === 'rate_limited') {
+    return 'Sleeper is rate-limiting requests. Please wait a moment and try again.'
+  }
+  return `Unable to load ${resource} right now. Please try again.`
 }
 
 export default App
