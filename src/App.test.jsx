@@ -26,10 +26,14 @@ test('finds leagues, lets the user choose a season, and confirms the selection',
         season === currentSeason || season === currentSeason - 1
           ? [
               {
-                league_id: 'league-123',
-                name: 'Friends League',
-                season: String(season),
-              },
+              league_id:
+                season === currentSeason ? 'league-current' : 'league-previous',
+              ...(season === currentSeason && {
+                previous_league_id: 'league-previous',
+              }),
+              name: 'Friends League',
+              season: String(season),
+            },
             ]
           : [],
       ),
@@ -50,21 +54,22 @@ test('finds leagues, lets the user choose a season, and confirms the selection',
     `https://api.sleeper.app/v1/user/user-123/leagues/nfl/${currentSeason}`,
   )
 
-  fireEvent.change(leagueSelect, { target: { value: 'league-123' } })
+  fireEvent.change(leagueSelect, { target: { value: 'league-previous' } })
+  expect(leagueSelect.options).toHaveLength(2)
   const seasonSelect = screen.getByRole('combobox', { name: 'Season' })
   expect(seasonSelect.options).toHaveLength(3)
 
   const continueButton = screen.getByRole('button', { name: 'Continue' })
   expect(continueButton.disabled).toBe(true)
   fireEvent.change(seasonSelect, {
-    target: { value: String(currentSeason) },
+    target: { value: String(currentSeason - 1) },
   })
   expect(continueButton.disabled).toBe(false)
   fireEvent.click(continueButton)
 
-  expect(
-    screen.getByText(/Selection confirmed: Friends League,/).textContent,
-  ).toContain(`${currentSeason} season. Ready for the next step.`)
+  expect(screen.getByRole('region', { name: 'Next step' })).toBeTruthy()
+  expect(screen.getByText('Season: ' + (currentSeason - 1))).toBeTruthy()
+  expect(screen.getByText('League ID: league-previous')).toBeTruthy()
 })
 
 test('shows a helpful message when the username has no leagues', async () => {

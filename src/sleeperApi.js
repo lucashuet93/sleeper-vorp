@@ -35,15 +35,37 @@ export async function fetchLeaguesForUsername(username, fetchImpl = fetch) {
     }),
   )
 
+  const leagueRecords = leagueLists.flat()
+  const recordsById = new Map(
+    leagueRecords.map((league) => [league.league_id, league]),
+  )
   const leagues = new Map()
-  leagueLists.flat().forEach((league) => {
-    const existing = leagues.get(league.league_id)
+
+  function getRenewalRootId(league) {
+    let current = league
+    const visited = new Set()
+    while (current.previous_league_id && !visited.has(current.league_id)) {
+      visited.add(current.league_id)
+      const previous = recordsById.get(current.previous_league_id)
+      if (!previous) {
+        return current.previous_league_id
+      }
+      current = previous
+    }
+    return current.league_id
+  }
+
+  leagueRecords.forEach((league) => {
+    const renewalRootId = getRenewalRootId(league)
+    const existing = leagues.get(renewalRootId)
+    const season = { season: league.season, league_id: league.league_id }
     if (existing) {
-      existing.seasons.push(league.season)
+      existing.seasons.push(season)
     } else {
-      leagues.set(league.league_id, {
+      leagues.set(renewalRootId, {
         ...league,
-        seasons: [league.season],
+        league_id: renewalRootId,
+        seasons: [season],
       })
     }
   })
@@ -51,9 +73,11 @@ export async function fetchLeaguesForUsername(username, fetchImpl = fetch) {
   return [...leagues.values()]
     .map((league) => ({
       ...league,
-      seasons: [...new Set(league.seasons)].sort(
-        (left, right) => Number(right) - Number(left),
-      ),
+      seasons: [
+        ...new Map(
+          league.seasons.map((season) => [season.season, season]),
+        ).values(),
+      ].sort((left, right) => Number(right.season) - Number(left.season)),
     }))
     .sort((left, right) => left.name.localeCompare(right.name))
 }
