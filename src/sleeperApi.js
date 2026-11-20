@@ -196,13 +196,55 @@ export async function fetchLeagueData(leagueId, season, { fetchImpl = fetch, sig
 
   const players = await waitForPlayerDirectory(fetchImpl, String(state.season), signal)
   if (signal?.aborted) throw requestError('request_cancelled')
+  const labeledPlayers = labelPlayersByRoster(players, rosters, users)
   return {
     league,
     scoringSettings: league.scoring_settings ?? {},
     rosterSettings: league.roster_positions ?? [],
     users,
     rosters,
-    players,
-    playerDirectory: players,
+    players: labeledPlayers,
+    playerDirectory: labeledPlayers,
   }
+}
+
+export function labelPlayersByRoster(players, rosters, users) {
+  const usersById = new Map(
+    users.filter((user) => user?.user_id != null)
+      .map((user) => [String(user.user_id), user]),
+  )
+  const rosterByPlayerId = new Map()
+
+  rosters.forEach((roster) => {
+    const ownerId = roster.owner_id ?? null
+    const rosterInfo = {
+      rosterId: roster.roster_id ?? null,
+      ownerId,
+      owner: ownerId == null ? null : usersById.get(String(ownerId)) ?? null,
+    }
+    const rosteredPlayerIds = [
+      ...(Array.isArray(roster.players) ? roster.players : []),
+      ...(Array.isArray(roster.reserve) ? roster.reserve : []),
+      ...(Array.isArray(roster.taxi) ? roster.taxi : []),
+    ]
+    rosteredPlayerIds.forEach((playerId) => {
+      if (playerId != null && !rosterByPlayerId.has(String(playerId))) {
+        rosterByPlayerId.set(String(playerId), rosterInfo)
+      }
+    })
+  })
+
+  return Object.fromEntries(
+    Object.entries(players).map(([playerId, player]) => {
+      const roster = rosterByPlayerId.get(String(playerId)) ?? null
+      return [
+        playerId,
+        {
+          ...player,
+          rosterStatus: roster ? 'rostered' : 'free_agent',
+          roster,
+        },
+      ]
+    }),
+  )
 }

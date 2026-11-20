@@ -31,10 +31,14 @@ const { league, scoringSettings, rosterSettings, users, rosters, players } = dat
 `scoring_settings` object; `rosterSettings` is the `roster_positions` array,
 including bench and starter slots such as `SUPER_FLEX`. `users` and `rosters`
 are the selected league's Sleeper records, linked by `user_id` / `owner_id`.
-`players` is Sleeper's NFL player directory keyed by player ID;
-`playerDirectory` is an alias of the same object. It is an ID lookup for the
-current NFL season, not a historical eligibility list or a guarantee that every
-listed player is eligible for a particular calculation.
+`players` is Sleeper's NFL player directory keyed by player ID, with each player
+annotated with `rosterStatus` (`rostered` or `free_agent`) and `roster`. A
+rostered player's `roster` contains its `rosterId`, `ownerId`, and matching
+`owner` user record (or `null` if no owner record is available); a free agent's
+`roster` is `null`. Active roster, reserve, and taxi player IDs are treated as
+rostered. `playerDirectory` is an alias of this same labeled object. It is an ID
+lookup for the current NFL season, not a historical eligibility list or a
+guarantee that every listed player is eligible for a particular calculation.
 
 The current season is identified by Sleeper's `/state/nfl` `season`, rather
 than the calendar year. For another season, the service fetches the selected
