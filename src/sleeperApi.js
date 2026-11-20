@@ -9,6 +9,7 @@ export async function fetchLeaguesForUsername(username, fetchImpl = fetch) {
   if (userResponse.status === 404) {
     throw new Error('user_not_found')
   }
+
   if (!userResponse.ok) {
     throw new Error('request_failed')
   }
@@ -80,4 +81,128 @@ export async function fetchLeaguesForUsername(username, fetchImpl = fetch) {
       ].sort((left, right) => Number(right.season) - Number(left.season)),
     }))
     .sort((left, right) => left.name.localeCompare(right.name))
+}
+
+const REQUEST_TIMEOUT_MS = 15000
+const playerDirectories = new WeakMap()
+
+function requestError(code) {
+  return new Error(code)
+}
+
+async function requestJson(url, fetchImpl, { signal, league = false } = {}) {
+  if (signal?.aborted) throw requestError('request_cancelled')
+
+  const controller = new AbortController()
+  let timeout
+  let onAbort
+  const interrupted = new Promise((_, reject) => {
+    timeout = setTimeout(() => {
+      controller.abort()
+      reject(requestError('network_error'))
+    }, REQUEST_TIMEOUT_MS)
+    onAbort = () => {
+      controller.abort()
+      reject(requestError('request_cancelled'))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+
+  try {
+    return await Promise.race([
+      (async () => {
+        let response
+        try {
+          response = await fetchImpl(url, { signal: controller.signal })
+        } catch {
+          throw requestError('network_error')
+        }
+        if (league && response.status === 404) {
+          throw requestError('league_not_found')
+        }
+        if (!response.ok) throw requestError('request_failed')
+        try {
+          return await response.json()
+        } catch {
+          throw requestError('request_failed')
+        }
+      })(),
+      interrupted,
+    ])
+  } finally {
+    clearTimeout(timeout)
+    signal?.removeEventListener('abort', onAbort)
+  }
+}
+
+function getPlayerDirectory(fetchImpl, season) {
+  let directories = playerDirectories.get(fetchImpl)
+  if (!directories) {
+    directories = new Map()
+    playerDirectories.set(fetchImpl, directories)
+  }
+  let request = directories.get(season)
+  if (!request) {
+    request = requestJson(`${API_BASE_URL}/players/nfl`, fetchImpl)
+      .then((players) => {
+        if (!players || typeof players !== 'object' || Array.isArray(players) ||
+            Object.keys(players).length === 0) {
+          throw requestError('request_failed')
+        }
+        return players
+      })
+      .catch((error) => {
+        directories.delete(season)
+        throw error
+      })
+    directories.set(season, request)
+  }
+  return request
+}
+
+async function waitForPlayerDirectory(fetchImpl, season, signal) {
+  if (!signal) return getPlayerDirectory(fetchImpl, season)
+  if (signal.aborted) throw requestError('request_cancelled')
+  let onAbort
+  const cancelled = new Promise((_, reject) => {
+    onAbort = () => reject(requestError('request_cancelled'))
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+  try {
+    return await Promise.race([getPlayerDirectory(fetchImpl, season), cancelled])
+  } finally {
+    signal.removeEventListener('abort', onAbort)
+  }
+}
+
+export async function fetchLeagueData(leagueId, season, { fetchImpl = fetch, signal } = {}) {
+  const leagueUrl = `${API_BASE_URL}/league/${encodeURIComponent(leagueId)}`
+  const league = await requestJson(leagueUrl, fetchImpl, { signal, league: true })
+  if (!league || !league.league_id) throw requestError('league_not_found')
+  if (String(league.league_id) !== String(leagueId) ||
+      String(league.season) !== String(season)) throw requestError('request_failed')
+  if (signal?.aborted) throw requestError('request_cancelled')
+
+  const [state, users, rosters] = await Promise.all([
+    requestJson(`${API_BASE_URL}/state/nfl`, fetchImpl, { signal }),
+    requestJson(`${leagueUrl}/users`, fetchImpl, { signal }),
+    requestJson(`${leagueUrl}/rosters`, fetchImpl, { signal }),
+  ])
+  if (signal?.aborted) throw requestError('request_cancelled')
+  if (!state?.season) throw requestError('request_failed')
+  // The global directory has no historical eligibility information.
+  if (String(state.season) !== String(season)) throw requestError('unsupported_season')
+  if (!Array.isArray(users) || !Array.isArray(rosters)) throw requestError('request_failed')
+
+  const players = await waitForPlayerDirectory(fetchImpl, String(state.season), signal)
+  if (signal?.aborted) throw requestError('request_cancelled')
+  return {
+    league,
+    scoringSettings: league.scoring_settings ?? {},
+    rosterSettings: league.roster_positions ?? [],
+    users,
+    rosters,
+    players,
+    playerDirectory: players,
+  }
 }
