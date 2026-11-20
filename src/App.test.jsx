@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import App from './App.jsx'
 
 function response(data, status = 200) {
@@ -204,4 +204,80 @@ test('shows a friendly message when selected league data is rate limited', async
   expect((await screen.findByRole('alert')).textContent).toMatch(
     /Sleeper is rate-limiting requests/,
   )
+})
+
+test.each(['success', 'failure'])('ignores a stale league load after changing season (%s)', async (outcome) => {
+  const currentSeason = new Date().getFullYear()
+  let finishOld
+  let finishNew
+  global.fetch.mockImplementation((url) => {
+    if (url.endsWith('/user/fan')) return Promise.resolve(response({ user_id: 'user-123' }))
+    if (url.includes('/user/user-123/leagues/nfl/')) {
+      const season = Number(url.split('/').pop())
+      return Promise.resolve(response(
+        season === currentSeason || season === currentSeason - 1
+          ? [{ league_id: `league-${season}`, name: 'League', season: String(season),
+              ...(season === currentSeason && { previous_league_id: `league-${season - 1}` }) }]
+          : [],
+      ))
+    }
+    if (url.endsWith(`/league/league-${currentSeason}`)) {
+      return new Promise((resolve) => { finishOld = resolve })
+    }
+    if (url.endsWith(`/league/league-${currentSeason - 1}`)) {
+      return new Promise((resolve) => { finishNew = resolve })
+    }
+    if (url.endsWith('/players/nfl')) return Promise.resolve(response({}))
+    return Promise.resolve(response([]))
+  })
+
+  render(<App />)
+  fireEvent.change(screen.getByLabelText('Sleeper username'), { target: { value: 'fan' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Find leagues' }))
+  fireEvent.change(await screen.findByLabelText('League'), { target: { value: `league-${currentSeason - 1}` } })
+  fireEvent.change(screen.getByLabelText('Season'), { target: { value: String(currentSeason) } })
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+  fireEvent.change(screen.getByLabelText('Season'), { target: { value: String(currentSeason - 1) } })
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+
+  await act(async () => {
+    finishOld(outcome === 'success'
+      ? response({ league_id: `league-${currentSeason}`, season: String(currentSeason) })
+      : response(null, 429))
+  })
+  expect(screen.getByRole('button', { name: 'Loading league data…' }).disabled).toBe(true)
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(screen.queryByRole('region', { name: 'Next step' })).toBeNull()
+
+  finishNew(response({ league_id: `league-${currentSeason - 1}`, season: String(currentSeason - 1) }))
+  expect(await screen.findByText(`Season: ${currentSeason - 1}`)).toBeTruthy()
+})
+
+test('ignores a pending league load when starting a new search', async () => {
+  const season = String(new Date().getFullYear())
+  let finishOld
+  global.fetch.mockImplementation((url) => {
+    if (url.endsWith('/user/fan')) return Promise.resolve(response({ user_id: 'user-123' }))
+    if (url.endsWith('/user/other')) return Promise.resolve(response({ user_id: 'user-456' }))
+    if (url.endsWith(`/user/user-123/leagues/nfl/${season}`)) {
+      return Promise.resolve(response([{ league_id: 'league-123', name: 'League', season }]))
+    }
+    if (url.endsWith('/league/league-123')) {
+      return new Promise((resolve) => { finishOld = resolve })
+    }
+    return Promise.resolve(response([]))
+  })
+  render(<App />)
+  fireEvent.change(screen.getByLabelText('Sleeper username'), { target: { value: 'fan' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Find leagues' }))
+  fireEvent.change(await screen.findByLabelText('League'), { target: { value: 'league-123' } })
+  fireEvent.change(screen.getByLabelText('Season'), { target: { value: season } })
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+  fireEvent.change(screen.getByLabelText('Sleeper username'), { target: { value: 'other' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Find leagues' }))
+  expect(await screen.findByText('No leagues found for this Sleeper username.')).toBeTruthy()
+
+  await act(async () => { finishOld(response(null, 429)) })
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(screen.queryByRole('region', { name: 'Next step' })).toBeNull()
 })

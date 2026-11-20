@@ -72,6 +72,16 @@ test('reports a missing league separately', async () => {
   await expect(fetchLeagueData('league-123', fetchImpl)).rejects.toThrow(
     'league_not_found',
   )
+  expect(fetchImpl).toHaveBeenCalledTimes(1)
+})
+
+test('reports a null league as missing before requesting dependent data', async () => {
+  const fetchImpl = jest.fn().mockResolvedValue(response(null))
+
+  await expect(fetchLeagueData('league-123', fetchImpl)).rejects.toThrow(
+    'league_not_found',
+  )
+  expect(fetchImpl).toHaveBeenCalledTimes(1)
 })
 
 test('normalizes network errors for a user-friendly message', async () => {

@@ -99,16 +99,26 @@ export async function fetchLeaguesForUsername(username, fetchImpl = fetch) {
 }
 
 export async function fetchLeagueData(leagueId, fetchImpl = fetch) {
-  const [league, users, rosters, players] = await Promise.all([
-    fetchJson(`${API_BASE_URL}/league/${encodeURIComponent(leagueId)}`, fetchImpl, 'league_not_found'),
+  const league = await fetchJson(
+    `${API_BASE_URL}/league/${encodeURIComponent(leagueId)}`,
+    fetchImpl,
+    'league_not_found',
+  )
+
+  if (!league) {
+    throw new Error('league_not_found')
+  }
+  if (typeof league !== 'object' || Array.isArray(league)) {
+    throw new Error('request_failed')
+  }
+
+  const [users, rosters, players] = await Promise.all([
     fetchJson(`${API_BASE_URL}/league/${encodeURIComponent(leagueId)}/users`, fetchImpl),
     fetchJson(`${API_BASE_URL}/league/${encodeURIComponent(leagueId)}/rosters`, fetchImpl),
     fetchJson(`${API_BASE_URL}/players/nfl`, fetchImpl),
   ])
 
   if (
-    !league ||
-    typeof league !== 'object' ||
     !Array.isArray(users) ||
     !Array.isArray(rosters) ||
     !players ||

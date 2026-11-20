@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { fetchLeagueData, fetchLeaguesForUsername } from './sleeperApi.js'
 
 function App() {
@@ -12,6 +12,16 @@ function App() {
   const [confirmedSelection, setConfirmedSelection] = useState(null)
   const [leagueData, setLeagueData] = useState(null)
   const [hasSearched, setHasSearched] = useState(false)
+  const leagueRequest = useRef(0)
+
+  useEffect(() => () => {
+    leagueRequest.current += 1
+  }, [])
+
+  function invalidateLeagueRequest() {
+    leagueRequest.current += 1
+    setLoadingLeagueData(false)
+  }
 
   const selectedLeague = leagues.find(
     (league) => league.league_id === selectedLeagueId,
@@ -22,6 +32,7 @@ function App() {
 
   async function handleSubmit(event) {
     event.preventDefault()
+    invalidateLeagueRequest()
     setLoading(true)
     setError('')
     setLeagues([])
@@ -49,12 +60,14 @@ function App() {
       return
     }
 
+    const requestId = ++leagueRequest.current
     setLoadingLeagueData(true)
     setError('')
     setLeagueData(null)
     setConfirmedSelection(null)
     try {
       const data = await fetchLeagueData(selectedSeasonRecord.league_id)
+      if (requestId !== leagueRequest.current) return
       setLeagueData(data)
       setConfirmedSelection({
         leagueId: selectedSeasonRecord.league_id,
@@ -62,9 +75,13 @@ function App() {
         season: selectedSeasonRecord.season,
       })
     } catch (requestError) {
-      setError(getErrorMessage(requestError, 'league data'))
+      if (requestId === leagueRequest.current) {
+        setError(getErrorMessage(requestError, 'league data'))
+      }
     } finally {
-      setLoadingLeagueData(false)
+      if (requestId === leagueRequest.current) {
+        setLoadingLeagueData(false)
+      }
     }
   }
 
@@ -76,7 +93,10 @@ function App() {
         <input
           id="sleeper-username"
           value={username}
-          onChange={(event) => setUsername(event.target.value)}
+          onChange={(event) => {
+            invalidateLeagueRequest()
+            setUsername(event.target.value)
+          }}
           required
         />
         <button type="submit" disabled={loading}>
@@ -97,6 +117,7 @@ function App() {
             id="league"
             value={selectedLeagueId}
             onChange={(event) => {
+              invalidateLeagueRequest()
               setSelectedLeagueId(event.target.value)
               setSelectedSeason('')
               setConfirmedSelection(null)
@@ -119,6 +140,7 @@ function App() {
                 id="season"
                 value={selectedSeason}
                 onChange={(event) => {
+                  invalidateLeagueRequest()
                   setSelectedSeason(event.target.value)
                   setConfirmedSelection(null)
                   setLeagueData(null)
