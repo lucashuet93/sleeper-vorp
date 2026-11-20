@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { fetchLeaguesForUsername } from './sleeperApi.js'
+import { useEffect, useRef, useState } from 'react'
+import { fetchLeagueData, fetchLeaguesForUsername } from './sleeperApi.js'
 
 function App() {
   const [username, setUsername] = useState('')
@@ -10,6 +10,25 @@ function App() {
   const [error, setError] = useState('')
   const [confirmedSelection, setConfirmedSelection] = useState(null)
   const [hasSearched, setHasSearched] = useState(false)
+  const [leagueData, setLeagueData] = useState(null)
+  const [loadingLeague, setLoadingLeague] = useState(false)
+  const request = useRef({ nonce: 0, controller: null })
+
+  function invalidateRequests() {
+    request.current.nonce += 1
+    request.current.controller?.abort()
+    request.current.controller = null
+    setLoading(false)
+    setLoadingLeague(false)
+    setLeagueData(null)
+    setConfirmedSelection(null)
+    setError('')
+  }
+
+  useEffect(() => () => {
+    request.current.nonce += 1
+    request.current.controller?.abort()
+  }, [])
 
   const selectedLeague = leagues.find(
     (league) => league.league_id === selectedLeagueId,
@@ -20,6 +39,8 @@ function App() {
 
   async function handleSubmit(event) {
     event.preventDefault()
+    invalidateRequests()
+    const nonce = request.current.nonce
     setLoading(true)
     setError('')
     setLeagues([])
@@ -30,29 +51,58 @@ function App() {
 
     try {
       const results = await fetchLeaguesForUsername(username.trim())
+      if (nonce !== request.current.nonce) return
       setLeagues(results)
       setHasSearched(true)
     } catch (requestError) {
+      if (nonce !== request.current.nonce) return
       setError(
         requestError.message === 'user_not_found'
           ? 'No Sleeper account found for that username. Check the spelling and try again.'
           : 'Unable to load leagues right now. Please try again.',
       )
     } finally {
-      setLoading(false)
+      if (nonce === request.current.nonce) setLoading(false)
     }
   }
 
-  function handleContinue() {
+  async function handleContinue() {
     if (!selectedLeague || !selectedSeasonRecord) {
       return
     }
 
-    setConfirmedSelection({
+    invalidateRequests()
+    const nonce = request.current.nonce
+    const controller = new AbortController()
+    request.current.controller = controller
+    const selection = {
       leagueId: selectedSeasonRecord.league_id,
       leagueName: selectedLeague.name,
       season: selectedSeasonRecord.season,
-    })
+    }
+    setLoadingLeague(true)
+    try {
+      const data = await fetchLeagueData(selection.leagueId, selection.season, {
+        signal: controller.signal,
+      })
+      if (nonce !== request.current.nonce) return
+      setLeagueData(data)
+      setConfirmedSelection(selection)
+    } catch (requestError) {
+      if (nonce !== request.current.nonce) return
+      const messages = {
+        league_not_found: 'This league could not be found. Please select another league.',
+        unsupported_season: 'Player data is not available for this season. Select the current NFL season.',
+        network_error: 'Unable to reach Sleeper. Please try again.',
+        request_failed: 'Unable to load league data right now. Please try again.',
+      }
+      setError(messages[requestError.message] || messages.request_failed)
+    } finally {
+      if (nonce === request.current.nonce) {
+        request.current.controller = null
+        setLoadingLeague(false)
+      }
+    }
   }
 
   return (
@@ -63,7 +113,14 @@ function App() {
         <input
           id="sleeper-username"
           value={username}
-          onChange={(event) => setUsername(event.target.value)}
+          onChange={(event) => {
+            invalidateRequests()
+            setUsername(event.target.value)
+            setLeagues([])
+            setSelectedLeagueId('')
+            setSelectedSeason('')
+            setHasSearched(false)
+          }}
           required
         />
         <button type="submit" disabled={loading}>
@@ -84,6 +141,7 @@ function App() {
             id="league"
             value={selectedLeagueId}
             onChange={(event) => {
+              invalidateRequests()
               setSelectedLeagueId(event.target.value)
               setSelectedSeason('')
               setConfirmedSelection(null)
@@ -104,6 +162,7 @@ function App() {
                 id="season"
                 value={selectedSeason}
                 onChange={(event) => {
+                  invalidateRequests()
                   setSelectedSeason(event.target.value)
                   setConfirmedSelection(null)
                 }}
@@ -123,15 +182,16 @@ function App() {
 
           <button
             type="button"
-            disabled={!selectedLeague || !selectedSeasonRecord}
+            disabled={!selectedLeague || !selectedSeasonRecord || loadingLeague}
             onClick={handleContinue}
           >
             Continue
           </button>
+          {loadingLeague && <p role="status">Loading league data…</p>}
         </section>
       )}
 
-      {confirmedSelection && (
+      {confirmedSelection && leagueData && (
         <section aria-label="Next step">
           <h2>Next step</h2>
           <p>League: {confirmedSelection.leagueName}</p>
