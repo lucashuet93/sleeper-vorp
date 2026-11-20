@@ -77,3 +77,32 @@ to maximize projected starter scores. `SUPER_FLEX` can be filled by QB, RB, WR,
 or TE. `startersPerTeam` is the league-wide allocated starter count divided by
 the number of rosters, so it can be fractional when shared slots are allocated
 differently across the league.
+
+## VORP calculation
+
+`calculateVorp` in `src/vorp.js` calculates fantasy points from a player's
+`stats` (or `projections`) and the league's scoring settings, then subtracts a
+position-specific replacement score. It accepts the player directory as an
+object keyed by player ID or as an array, plus `scoringSettings`,
+`rosterSettings`, and `totalRosters` from the loaded league:
+
+```js
+const values = calculateVorp({
+  players,
+  scoringSettings,
+  rosterSettings,
+  totalRosters: league.total_rosters,
+  replacementMethod: 'rank-based',
+})
+```
+
+The result is keyed by player ID and includes `fantasyPoints`, `positionRank`,
+`replacementPoints`, and `vorp`. Only QB, RB, WR, TE, and K are included.
+`rank-based` uses the first player's positional rank after the applicable
+starting slots multiplied by the number of rosters; bench and reserve slots do
+not count. Shared FLEX slots count toward each eligible position's replacement
+rank. `free-agent` uses the highest-scoring player marked with
+`rosterStatus: 'free_agent'` at that position; if none is available, the
+replacement score is zero. Player performance stats/projections must be
+provided separately because the Sleeper player directory is metadata, not a
+source of fantasy performance totals.
