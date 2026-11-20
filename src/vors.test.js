@@ -67,8 +67,36 @@ test('allocates superflex to the highest-scoring eligible position', () => {
   expect(result.replacementBaselines.QB).toEqual({
     startersPerTeam: 0,
     starterCount: 0,
-    replacementRank: null,
-    score: null,
+    replacementRank: 1,
+    score: 30,
+  })
+  expect(result.players.QB1.vors).toBe(0)
+  expect(result.players.QB2.vors).toBe(-10)
+})
+
+test('terminates shared-slot allocation with decimal projections', () => {
+  const players = {
+    ...playersAt('RB', [76.7, 76.7]),
+    ...playersAt('TE', [30.2, 29.2]),
+  }
+
+  const result = calculateVors(
+    players,
+    ['WRRB_FLEX', 'REC_FLEX'],
+    1,
+  )
+
+  expect(result.replacementBaselines.RB).toEqual({
+    startersPerTeam: 1,
+    starterCount: 1,
+    replacementRank: 2,
+    score: 76.7,
+  })
+  expect(result.replacementBaselines.TE).toEqual({
+    startersPerTeam: 1,
+    starterCount: 1,
+    replacementRank: 2,
+    score: 29.2,
   })
 })
 

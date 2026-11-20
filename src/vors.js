@@ -110,7 +110,7 @@ function allocateSharedStarters(
     for (let pass = 0; pass < graph.length - 1; pass += 1) {
       let changed = false
       graph.forEach((edges, node) => {
-        if (!Number.isFinite(distances[node])) return
+        if (node === sink || !Number.isFinite(distances[node])) return
         edges.forEach((edge, edgeIndex) => {
           const distance = distances[node] + edge.cost
           if (edge.capacity > 0 && distance < distances[edge.to]) {
@@ -189,9 +189,14 @@ export function calculateVors(
     const starterCount =
       starterConfiguration.counts[position] * totalRosters +
       flexStarterCounts[position]
-    const replacementRank = starterCount + 1
+    const hasStartingSlot = starterConfiguration.counts[position] > 0 ||
+      Object.entries(starterConfiguration.sharedSlots).some(
+        ([slot, count]) =>
+          count > 0 && STARTER_SLOT_POSITIONS[slot].includes(position),
+      )
+    const replacementRank = hasStartingSlot ? starterCount + 1 : null
     const rankedPlayers = rankedPlayersByPosition[position]
-    const replacementScore = starterCount > 0 &&
+    const replacementScore = replacementRank != null &&
       replacementRank <= rankedPlayers.length
       ? rankedPlayers[replacementRank - 1][1][scoreField]
       : null
@@ -201,7 +206,7 @@ export function calculateVors(
         starterConfiguration.counts[position] +
         flexStarterCounts[position] / totalRosters,
       starterCount,
-      replacementRank: starterCount > 0 ? replacementRank : null,
+      replacementRank,
       score: replacementScore,
     }
 
