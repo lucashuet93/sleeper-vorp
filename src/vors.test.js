@@ -35,7 +35,6 @@ test('calculates VORS against the player immediately outside the starter pool', 
 })
 
 test.each([
-  ['superflex', ['QB', 'SUPER_FLEX'], 2],
   ['two QB starters', ['QB', 'QB'], 2],
 ])('includes %s spots in the QB replacement baseline', (_name, rosterSettings, starterCount) => {
   const players = playersAt('QB', [40, 35, 30, 25, 20, 15])
@@ -49,6 +48,50 @@ test.each([
     score: 20,
   })
   expect(result.players.QB5.vors).toBe(0)
+})
+
+test('allocates superflex to the highest-scoring eligible position', () => {
+  const players = {
+    ...playersAt('RB', [100, 90, 80]),
+    ...playersAt('QB', [30, 20]),
+  }
+
+  const result = calculateVors(players, ['RB', 'SUPER_FLEX'], 1)
+
+  expect(result.replacementBaselines.RB).toEqual({
+    startersPerTeam: 2,
+    starterCount: 2,
+    replacementRank: 3,
+    score: 80,
+  })
+  expect(result.replacementBaselines.QB).toEqual({
+    startersPerTeam: 0,
+    starterCount: 0,
+    replacementRank: null,
+    score: null,
+  })
+})
+
+test('allocates each shared flex slot once using projected scores', () => {
+  const players = {
+    ...playersAt('RB', [30, 20, 10]),
+    ...playersAt('WR', [29, 19, 9]),
+  }
+
+  const result = calculateVors(players, ['RB', 'WR', 'FLEX'], 1)
+
+  expect(result.replacementBaselines.RB).toEqual({
+    startersPerTeam: 2,
+    starterCount: 2,
+    replacementRank: 3,
+    score: 10,
+  })
+  expect(result.replacementBaselines.WR).toEqual({
+    startersPerTeam: 1,
+    starterCount: 1,
+    replacementRank: 2,
+    score: 19,
+  })
 })
 
 test('counts eligible flex slots, excludes bench slots, and leaves unsupported baselines empty', () => {
@@ -65,25 +108,25 @@ test('counts eligible flex slots, excludes bench slots, and leaves unsupported b
   )
 
   expect(result.replacementBaselines.RB).toEqual({
+    startersPerTeam: 2,
+    starterCount: 2,
+    replacementRank: 3,
+    score: 20,
+  })
+  expect(result.replacementBaselines.WR).toEqual({
     startersPerTeam: 3,
     starterCount: 3,
     replacementRank: 4,
     score: 15,
   })
-  expect(result.replacementBaselines.WR).toEqual({
-    startersPerTeam: 4,
-    starterCount: 4,
-    replacementRank: 5,
-    score: 10,
-  })
   expect(result.replacementBaselines.TE).toEqual({
-    startersPerTeam: 3,
-    starterCount: 3,
-    replacementRank: 4,
-    score: 5,
+    startersPerTeam: 1,
+    starterCount: 1,
+    replacementRank: 2,
+    score: 15,
   })
   expect(result.replacementBaselines.QB.score).toBeNull()
-  expect(result.players.RB1.vors).toBe(15)
+  expect(result.players.RB1.vors).toBe(10)
 })
 
 test('leaves VORS null when no replacement player is available', () => {

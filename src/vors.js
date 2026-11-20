@@ -9,22 +9,143 @@ const STARTER_SLOT_POSITIONS = {
   FLEX: ['RB', 'WR', 'TE'],
   WRRB_FLEX: ['RB', 'WR'],
   REC_FLEX: ['WR', 'TE'],
-  SUPER_FLEX: ['QB'],
+  SUPER_FLEX: ['QB', 'RB', 'WR', 'TE'],
 }
 
-function getStarterCounts(rosterSettings) {
+function getStarterConfiguration(rosterSettings) {
   const counts = Object.fromEntries(
     SUPPORTED_POSITIONS.map((position) => [position, 0]),
   )
+  const sharedSlots = {}
 
   rosterSettings.forEach((slot) => {
     const positions = STARTER_SLOT_POSITIONS[slot] ?? []
+    if (SUPPORTED_POSITIONS.includes(slot)) counts[slot] += 1
+    else if (positions.length) sharedSlots[slot] = (sharedSlots[slot] ?? 0) + 1
+  })
+
+  return { counts, sharedSlots }
+}
+
+function addEdge(graph, from, to, capacity, cost) {
+  const forward = {
+    to,
+    reverse: graph[to].length,
+    capacity,
+    initialCapacity: capacity,
+    cost,
+  }
+  const backward = {
+    to: from,
+    reverse: graph[from].length,
+    capacity: 0,
+    initialCapacity: 0,
+    cost: -cost,
+  }
+  graph[from].push(forward)
+  graph[to].push(backward)
+  return forward
+}
+
+function allocateSharedStarters(
+  rankedPlayers,
+  starterConfiguration,
+  totalRosters,
+  scoreField,
+) {
+  const sharedSlots = Object.entries(starterConfiguration.sharedSlots)
+    .map(([slot, count]) => ({
+      positions: STARTER_SLOT_POSITIONS[slot],
+      count: count * totalRosters,
+    }))
+  const positionOffset = 1 + sharedSlots.length
+  const sink = positionOffset + SUPPORTED_POSITIONS.length
+  const graph = Array.from({ length: sink + 1 }, () => [])
+  const source = 0
+  const positionNodes = Object.fromEntries(
+    SUPPORTED_POSITIONS.map((position, index) => [
+      position,
+      positionOffset + index,
+    ]),
+  )
+  const allocationEdges = []
+
+  sharedSlots.forEach(({ positions, count }, index) => {
+    const slotNode = index + 1
+    addEdge(graph, source, slotNode, count, 0)
     positions.forEach((position) => {
-      counts[position] += 1
+      const edge = addEdge(
+        graph,
+        slotNode,
+        positionNodes[position],
+        count,
+        0,
+      )
+      allocationEdges.push({ edge, position })
     })
   })
 
-  return counts
+  SUPPORTED_POSITIONS.forEach((position) => {
+    const firstFlexibleRank =
+      starterConfiguration.counts[position] * totalRosters
+    rankedPlayers[position]
+      .slice(firstFlexibleRank)
+      .forEach(([, player]) => {
+        addEdge(
+          graph,
+          positionNodes[position],
+          sink,
+          1,
+          -player[scoreField],
+        )
+      })
+  })
+
+  while (true) {
+    const distances = Array(graph.length).fill(Infinity)
+    const previousNodes = Array(graph.length).fill(null)
+    const previousEdges = Array(graph.length).fill(null)
+    distances[source] = 0
+
+    for (let pass = 0; pass < graph.length - 1; pass += 1) {
+      let changed = false
+      graph.forEach((edges, node) => {
+        if (!Number.isFinite(distances[node])) return
+        edges.forEach((edge, edgeIndex) => {
+          const distance = distances[node] + edge.cost
+          if (edge.capacity > 0 && distance < distances[edge.to]) {
+            distances[edge.to] = distance
+            previousNodes[edge.to] = node
+            previousEdges[edge.to] = edgeIndex
+            changed = true
+          }
+        })
+      })
+      if (!changed) break
+    }
+
+    if (previousNodes[sink] == null) break
+
+    for (let node = sink; node !== source; node = previousNodes[node]) {
+      const from = previousNodes[node]
+      const edge = graph[from][previousEdges[node]]
+      edge.capacity -= 1
+      graph[node][edge.reverse].capacity += 1
+    }
+  }
+
+  return Object.fromEntries(
+    SUPPORTED_POSITIONS.map((position) => [
+      position,
+      allocationEdges
+        .filter((allocation) => allocation.position === position)
+        .reduce(
+          (allocated, { edge }) =>
+            allocated + edge.initialCapacity - edge.capacity,
+          0,
+        ),
+    ]),
+  )
 }
 
 export function calculateVors(
@@ -43,26 +164,42 @@ export function calculateVors(
     throw new RangeError('totalRosters must be a positive integer')
   }
 
-  const starterCounts = getStarterCounts(rosterSettings)
+  const starterConfiguration = getStarterConfiguration(rosterSettings)
+  const rankedPlayersByPosition = Object.fromEntries(
+    SUPPORTED_POSITIONS.map((position) => [
+      position,
+      Object.entries(players)
+        .filter(([, player]) =>
+          player?.position === position &&
+          Number.isFinite(player[scoreField]),
+        )
+        .sort(([, left], [, right]) => right[scoreField] - left[scoreField]),
+    ]),
+  )
+  const flexStarterCounts = allocateSharedStarters(
+    rankedPlayersByPosition,
+    starterConfiguration,
+    totalRosters,
+    scoreField,
+  )
   const replacementBaselines = {}
   const vorsByPlayerId = {}
 
   SUPPORTED_POSITIONS.forEach((position) => {
-    const starterCount = starterCounts[position] * totalRosters
+    const starterCount =
+      starterConfiguration.counts[position] * totalRosters +
+      flexStarterCounts[position]
     const replacementRank = starterCount + 1
-    const rankedPlayers = Object.entries(players)
-      .filter(([, player]) =>
-        player?.position === position &&
-        Number.isFinite(player[scoreField]),
-      )
-      .sort(([, left], [, right]) => right[scoreField] - left[scoreField])
+    const rankedPlayers = rankedPlayersByPosition[position]
     const replacementScore = starterCount > 0 &&
       replacementRank <= rankedPlayers.length
       ? rankedPlayers[replacementRank - 1][1][scoreField]
       : null
 
     replacementBaselines[position] = {
-      startersPerTeam: starterCounts[position],
+      startersPerTeam:
+        starterConfiguration.counts[position] +
+        flexStarterCounts[position] / totalRosters,
       starterCount,
       replacementRank: starterCount > 0 ? replacementRank : null,
       score: replacementScore,

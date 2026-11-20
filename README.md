@@ -72,5 +72,8 @@ value on each player, plus `replacementBaselines` for QB, RB, WR, TE, and K.
 The baseline is the projected score of the first player outside the
 league-wide starter count for that position; a baseline is `null` when the
 league has no starter slots for the position or the player pool is too small.
-Repeated QB slots and `SUPER_FLEX` slots count toward QB starters, while
-eligible FLEX slots count toward RB, WR, and TE starters.
+Shared FLEX and `SUPER_FLEX` slots are allocated once across eligible positions
+to maximize projected starter scores. `SUPER_FLEX` can be filled by QB, RB, WR,
+or TE. `startersPerTeam` is the league-wide allocated starter count divided by
+the number of rosters, so it can be fractional when shared slots are allocated
+differently across the league.
