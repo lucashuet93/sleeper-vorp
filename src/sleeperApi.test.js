@@ -119,6 +119,63 @@ test('shares in-flight and completed player downloads across leagues and retries
   expect(fetchImpl.mock.calls.filter(([url]) => url.endsWith('/players/nfl'))).toHaveLength(1)
 })
 
+test('refreshes the directory after a season transition and shares the new download', async () => {
+  let currentSeason = season
+  const pending = deferred()
+  const started = deferred()
+  const fetchImpl = jest.fn((url) => {
+    if (url.endsWith('/players/nfl')) {
+      if (currentSeason === season) return Promise.resolve(response({ old: {} }))
+      started.resolve()
+      return pending.promise
+    }
+    if (url.endsWith('/state/nfl')) return Promise.resolve(response({ season: currentSeason }))
+    if (url.endsWith('/users') || url.endsWith('/rosters')) return Promise.resolve(response([]))
+    return Promise.resolve(response({ ...league, season: currentSeason }))
+  })
+
+  await expect(fetchLeagueData('123', season, { fetchImpl })).resolves.toHaveProperty('players.old')
+  currentSeason = '2026'
+  const first = fetchLeagueData('123', currentSeason, { fetchImpl })
+  await started.promise
+  const second = fetchLeagueData('123', 2026, { fetchImpl })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(fetchImpl.mock.calls.filter(([url]) => url.endsWith('/players/nfl'))).toHaveLength(2)
+  pending.resolve(response({ new: {} }))
+  const results = await Promise.all([first, second])
+  expect(results[0].players).toEqual({ new: {} })
+  expect(results[1].players).toBe(results[0].players)
+  await expect(fetchLeagueData('123', '2026', { fetchImpl })).resolves.toHaveProperty('players.new')
+  expect(fetchImpl.mock.calls.filter(([url]) => url.endsWith('/players/nfl'))).toHaveLength(2)
+})
+
+test('a failed directory request does not evict another season', async () => {
+  let currentSeason = season
+  const pending = deferred()
+  const started = deferred()
+  const fetchImpl = jest.fn((url) => {
+    if (url.endsWith('/players/nfl')) {
+      if (currentSeason === season) {
+        started.resolve()
+        return pending.promise
+      }
+      return Promise.resolve(response({ new: {} }))
+    }
+    if (url.endsWith('/state/nfl')) return Promise.resolve(response({ season: currentSeason }))
+    if (url.endsWith('/users') || url.endsWith('/rosters')) return Promise.resolve(response([]))
+    return Promise.resolve(response({ ...league, season: currentSeason }))
+  })
+
+  const old = fetchLeagueData('123', season, { fetchImpl })
+  await started.promise
+  currentSeason = '2026'
+  await expect(fetchLeagueData('123', currentSeason, { fetchImpl })).resolves.toHaveProperty('players.new')
+  pending.resolve(response({}, 503))
+  await expect(old).rejects.toThrow('request_failed')
+  await expect(fetchLeagueData('123', currentSeason, { fetchImpl })).resolves.toHaveProperty('players.new')
+  expect(fetchImpl.mock.calls.filter(([url]) => url.endsWith('/players/nfl'))).toHaveLength(2)
+})
+
 test('does not cache an empty or failed player directory', async () => {
   let playerRequests = 0
   const fetchImpl = mockApi()

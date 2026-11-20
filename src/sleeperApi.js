@@ -135,8 +135,13 @@ async function requestJson(url, fetchImpl, { signal, league = false } = {}) {
   }
 }
 
-function getPlayerDirectory(fetchImpl) {
-  let request = playerDirectories.get(fetchImpl)
+function getPlayerDirectory(fetchImpl, season) {
+  let directories = playerDirectories.get(fetchImpl)
+  if (!directories) {
+    directories = new Map()
+    playerDirectories.set(fetchImpl, directories)
+  }
+  let request = directories.get(season)
   if (!request) {
     request = requestJson(`${API_BASE_URL}/players/nfl`, fetchImpl)
       .then((players) => {
@@ -147,16 +152,16 @@ function getPlayerDirectory(fetchImpl) {
         return players
       })
       .catch((error) => {
-        playerDirectories.delete(fetchImpl)
+        directories.delete(season)
         throw error
       })
-    playerDirectories.set(fetchImpl, request)
+    directories.set(season, request)
   }
   return request
 }
 
-async function waitForPlayerDirectory(fetchImpl, signal) {
-  if (!signal) return getPlayerDirectory(fetchImpl)
+async function waitForPlayerDirectory(fetchImpl, season, signal) {
+  if (!signal) return getPlayerDirectory(fetchImpl, season)
   if (signal.aborted) throw requestError('request_cancelled')
   let onAbort
   const cancelled = new Promise((_, reject) => {
@@ -164,7 +169,7 @@ async function waitForPlayerDirectory(fetchImpl, signal) {
     signal.addEventListener('abort', onAbort, { once: true })
   })
   try {
-    return await Promise.race([getPlayerDirectory(fetchImpl), cancelled])
+    return await Promise.race([getPlayerDirectory(fetchImpl, season), cancelled])
   } finally {
     signal.removeEventListener('abort', onAbort)
   }
@@ -189,7 +194,7 @@ export async function fetchLeagueData(leagueId, season, { fetchImpl = fetch, sig
   if (String(state.season) !== String(season)) throw requestError('unsupported_season')
   if (!Array.isArray(users) || !Array.isArray(rosters)) throw requestError('request_failed')
 
-  const players = await waitForPlayerDirectory(fetchImpl, signal)
+  const players = await waitForPlayerDirectory(fetchImpl, String(state.season), signal)
   if (signal?.aborted) throw requestError('request_cancelled')
   return {
     league,

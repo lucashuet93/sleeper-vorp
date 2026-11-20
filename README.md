@@ -40,9 +40,9 @@ The current season is identified by Sleeper's `/state/nfl` `season`, rather
 than the calendar year. For another season, the service fetches the selected
 league, users and rosters when available, but rejects with `unsupported_season`:
 Sleeper's global directory does not establish historical player eligibility.
-The directory is shared in memory for the browser session, including in-flight
-loads; failures and empty directories are not cached. Individual callers can
-cancel their load without aborting a shared directory download.
+The directory is shared in memory per season for the browser session, including
+in-flight loads; failures and empty directories are not cached. Individual
+callers can cancel their load without aborting a shared directory download.
 
 Errors are `Error` objects with these `message` codes:
 
