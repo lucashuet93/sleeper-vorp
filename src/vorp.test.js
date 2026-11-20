@@ -47,6 +47,31 @@ test('scores supported positions and uses rank-based replacement levels', () => 
   expect(result.k2.vorp).toBe(0)
 })
 
+test('applies reception bonuses only to the matching position', () => {
+  const result = calculateVorp({
+    players: {
+      rb1: { position: 'RB', stats: { rec: 5 } },
+      rb2: { position: 'RB', stats: { rec: 3 } },
+      wr1: { position: 'WR', stats: { rec: 5 } },
+      wr2: { position: 'WR', stats: { rec: 3 } },
+      te1: { position: 'TE', stats: { rec: 5 } },
+      te2: { position: 'TE', stats: { rec: 3 } },
+    },
+    scoringSettings: {
+      rec: 1,
+      bonus_rec_rb: 0.1,
+      bonus_rec_wr: 0.25,
+      bonus_rec_te: 0.5,
+    },
+    rosterSettings: ['RB', 'WR', 'TE'],
+    totalRosters: 1,
+  })
+
+  expect(result.rb1).toMatchObject({ fantasyPoints: 5.5, vorp: 2.2 })
+  expect(result.wr1).toMatchObject({ fantasyPoints: 6.25, vorp: 2.5 })
+  expect(result.te1).toMatchObject({ fantasyPoints: 7.5, vorp: 3 })
+})
+
 test('uses the best free agent at each position as the free-agent baseline', () => {
   const result = calculateVorp({
     players,

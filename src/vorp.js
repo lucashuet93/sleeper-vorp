@@ -1,4 +1,9 @@
 const SUPPORTED_POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K']
+const RECEPTION_BONUS_POSITIONS = {
+  bonus_rec_rb: 'RB',
+  bonus_rec_wr: 'WR',
+  bonus_rec_te: 'TE',
+}
 const POSITION_SLOTS = {
   QB: new Set(['QB', 'SUPER_FLEX']),
   RB: new Set(['RB', 'FLEX', 'WRRB_FLEX', 'SUPER_FLEX']),
@@ -20,7 +25,20 @@ function getPlayerEntries(players) {
 
 function scorePlayer(player, scoringSettings) {
   const stats = player.stats ?? player.projections ?? {}
+  const position = typeof player.position === 'string'
+    ? player.position.toUpperCase()
+    : ''
   return Object.entries(scoringSettings).reduce((total, [stat, points]) => {
+    if (Object.hasOwn(RECEPTION_BONUS_POSITIONS, stat)) {
+      const receptionBonusPosition = RECEPTION_BONUS_POSITIONS[stat]
+      const receptions = stats.rec
+      return position === receptionBonusPosition &&
+        Number.isFinite(points) &&
+        Number.isFinite(receptions)
+        ? total + points * receptions
+        : total
+    }
+
     const value = stats[stat]
     return Number.isFinite(points) && Number.isFinite(value)
       ? total + points * value
