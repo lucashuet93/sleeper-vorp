@@ -1,0 +1,27 @@
+{
+  "name": "sleeper-vorp",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "test": "jest"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@babel/core": "7.29.13",
+    "@babel/preset-env": "7.29.14",
+    "@babel/preset-react": "7.29.7",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@vitejs/plugin-react": "6.3.0",
+    "babel-jest": "30.5.2",
+    "jest": "30.5.2",
+    "jest-environment-jsdom": "30.5.2",
+    "vite": "8.3.8"
+  }
+}
