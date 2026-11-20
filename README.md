@@ -62,3 +62,15 @@ The loaded object is also exposed to descendants of `App` through the exported
 is `null` until loading succeeds and is cleared when the selection changes.
 Changing the username or selection invalidates pending loads so old results
 cannot replace the new selection.
+
+## Calculating VORS
+
+`calculateVors` in `src/vors.js` accepts a player directory, the league's
+`rosterSettings`, and `total_rosters`. Each player needs a supported `position`
+and numeric `projectedPoints` value. It returns the directory with a `vors`
+value on each player, plus `replacementBaselines` for QB, RB, WR, TE, and K.
+The baseline is the projected score of the first player outside the
+league-wide starter count for that position; a baseline is `null` when the
+league has no starter slots for the position or the player pool is too small.
+Repeated QB slots and `SUPER_FLEX` slots count toward QB starters, while
+eligible FLEX slots count toward RB, WR, and TE starters.
