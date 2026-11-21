@@ -18,12 +18,21 @@ Run the test suite with `npm test` and create a production build with `npm run b
 ## Player dashboard
 
 After loading a league, filter players by position and sort by fantasy points,
-VORP, or VORS using the column headings. The replacement-level selector changes
+VORP, VORS, or their per-game values using the column headings. The replacement-level selector changes
 the VORP baseline; VORS always uses its starter-based baseline. Dashboard loads
 fetch current regular-season player statistics along with the league and player
 directory. Values are unavailable for players without performance data or when
 league settings are missing. Use Refresh to fetch the data again; Last updated
 shows the local time of the most recent successful load.
+
+Fantasy points/G divides league-scored season points by Sleeper's season `gp`
+(games played). VORP/G and VORS/G subtract the per-game points of the same
+players selected as the season-total replacement and starter baselines; they
+do not rerank or reallocate starters by per-game scoring. A dash indicates
+unavailable per-game data: games played must be a positive integer for both
+the player and the relevant baseline player. No games or baseline is estimated
+when data is missing. Per-game player rankings are included in summary insights;
+team totals and positional advantages remain season-total comparisons.
 
 ## Loading league data
 
@@ -109,7 +118,7 @@ const values = calculateVorp({
 ```
 
 The result is keyed by player ID and includes `fantasyPoints`, `positionRank`,
-`replacementPoints`, and `vorp`. Only QB, RB, WR, TE, and K are included.
+`replacementPoints`, `vorp`, `fantasyPointsPerGame`, and `vorpPerGame`. Only QB, RB, WR, TE, and K are included.
 `rank-based` uses the first player's positional rank after the applicable
 starting slots multiplied by the number of rosters; bench and reserve slots do
 not count. Shared FLEX slots count toward each eligible position's replacement
@@ -118,3 +127,8 @@ rank. `free-agent` uses the highest-scoring player marked with
 replacement score is zero. Player performance stats/projections must be
 provided separately because the Sleeper player directory is metadata, not a
 source of fantasy performance totals.
+
+When `calculateVors` is called with `scoreField = 'fantasyPoints'` on these
+results, it also returns `vorsPerGame` for each player. Per-game fields are
+`null` when the required actual season stats or baseline games are unavailable;
+projections are not used to calculate them.

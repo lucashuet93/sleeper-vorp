@@ -273,3 +273,18 @@ test('calculates per-game VORS from the season-total starter baseline', () => {
     .toMatchObject({ vors: 20, vorsPerGame: null })
   expect(calculateVors(players, ['RB'], 4, 'fantasyPoints').players.first.vorsPerGame).toBeNull()
 })
+
+test('uses the season-total shared-slot allocation for per-game VORS', () => {
+  const players = {
+    rb1: { position: 'RB', fantasyPoints: 100, fantasyPointsPerGame: 10 },
+    rb2: { position: 'RB', fantasyPoints: 90, fantasyPointsPerGame: 9 },
+    rb3: { position: 'RB', fantasyPoints: 80, fantasyPointsPerGame: 8 },
+    qb1: { position: 'QB', fantasyPoints: 30, fantasyPointsPerGame: 30 },
+    qb2: { position: 'QB', fantasyPoints: 20, fantasyPointsPerGame: 20 },
+  }
+  const result = calculateVors(players, ['RB', 'SUPER_FLEX'], 1, 'fantasyPoints')
+  expect(result.replacementBaselines.RB.starterCount).toBe(2)
+  expect(result.replacementBaselines.QB.starterCount).toBe(0)
+  expect(result.players.rb1.vorsPerGame).toBe(2)
+  expect(result.players.qb2.vorsPerGame).toBe(-10)
+})

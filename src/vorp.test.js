@@ -212,3 +212,15 @@ test('rejects unknown replacement methods', () => {
     'replacementMethod must be "free-agent" or "rank-based"',
   )
 })
+
+test('does not derive per-game points from games played alone or projections', () => {
+  const result = calculateVorp({
+    players: {
+      gamesOnly: { position: 'QB', stats: { gp: 4 } },
+      projection: { position: 'QB', projections: { pass_yd: 100, gp: 4 } },
+    },
+    scoringSettings: { pass_yd: 1 },
+  })
+  expect(result.gamesOnly.fantasyPointsPerGame).toBeNull()
+  expect(result.projection.fantasyPointsPerGame).toBeNull()
+})

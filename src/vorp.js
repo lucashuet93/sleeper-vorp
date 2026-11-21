@@ -83,12 +83,14 @@ export function calculateVorp({
     if (!byPosition[position]) return
     const fantasyPoints = scorePlayer(player, settings)
     const gamesPlayed = player.stats?.gp
+    const hasSeasonStats = player.stats && typeof player.stats === 'object' &&
+      Object.entries(player.stats).some(([stat, value]) => stat !== 'gp' && Number.isFinite(value))
     byPosition[position].push({
       playerId,
       player,
       index,
       fantasyPoints,
-      fantasyPointsPerGame: Number.isInteger(gamesPlayed) && gamesPlayed > 0
+      fantasyPointsPerGame: hasSeasonStats && Number.isInteger(gamesPlayed) && gamesPlayed > 0
         ? fantasyPoints / gamesPlayed
         : null,
     })
