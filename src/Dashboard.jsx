@@ -1,8 +1,30 @@
 import { useMemo, useState } from 'react'
 import { calculateVorp } from './vorp.js'
 import { calculateVors } from './vors.js'
+import { calculateSummaryInsights } from './summaryInsights.js'
 
 const POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K']
+const METRICS = [['vorp', 'VORP'], ['vors', 'VORS']]
+
+function RankedTable({ entries, metric, title }) {
+  return (
+    <table aria-label={title}>
+      <thead>
+        <tr><th scope="col">Rank</th><th scope="col">Name</th><th scope="col">{metric.toUpperCase()}</th></tr>
+      </thead>
+      <tbody>
+        {entries.map((entry, index) => (
+          <tr key={entry.id}>
+            <td>{index + 1}</td>
+            <th scope="row">{entry.name}</th>
+            <td>{entry[metric].toFixed(2)}</td>
+          </tr>
+        ))}
+        {entries.length === 0 && <tr><td colSpan="3">No {metric.toUpperCase()} values available.</td></tr>}
+      </tbody>
+    </table>
+  )
+}
 
 function Dashboard({ leagueData }) {
   const [position, setPosition] = useState('All')
@@ -46,8 +68,13 @@ function Dashboard({ leagueData }) {
         fantasyPoints: values[id]?.fantasyPoints ?? null,
         vorp: values[id]?.vorp ?? null,
         vors: values[id]?.vors ?? null,
+        teamId: player.roster?.rosterId ?? player.roster?.ownerId ?? null,
       }))
   }, [leagueData, method])
+  const insights = useMemo(
+    () => calculateSummaryInsights(players, leagueData.rosters, leagueData.users),
+    [players, leagueData.rosters, leagueData.users],
+  )
 
   const visiblePlayers = players
     .filter((player) => position === 'All' || player.position === position)
@@ -86,7 +113,37 @@ function Dashboard({ leagueData }) {
       {players.some((player) => player.fantasyPoints == null) && (
         <p>Fantasy points, VORP, and VORS are unavailable without player performance data and league settings.</p>
       )}
-      <table>
+      <section aria-label="Summary insights">
+        <h3>Top players overall</h3>
+        {METRICS.map(([metric, label]) => (
+          <RankedTable key={metric} title={`Top players overall by ${label}`} entries={insights.topPlayers[metric]} metric={metric} />
+        ))}
+        <h3>Top players by position</h3>
+        {POSITIONS.map((item) => (
+          <section key={item} aria-label={`Top ${item} players`}>
+            <h4>{item}</h4>
+            {METRICS.map(([metric, label]) => (
+              <RankedTable key={metric} title={`Top ${item} players by ${label}`} entries={insights.positionPlayers[item][metric]} metric={metric} />
+            ))}
+          </section>
+        ))}
+        <h3>Top teams</h3>
+        {METRICS.map(([metric, label]) => (
+          <RankedTable key={metric} title={`Top teams by ${label}`} entries={insights.topTeams[metric]} metric={metric} />
+        ))}
+        <h3>Largest positional advantage</h3>
+        {METRICS.map(([metric, label]) => {
+          const advantage = insights.positionalAdvantages[metric]
+          return (
+            <p key={metric} aria-label={`Largest positional advantage by ${label}`}>
+              {label}: {advantage
+                ? `${advantage.team.name} at ${advantage.position} (${advantage.value.toFixed(2)} above league average)`
+                : 'No team data available.'}
+            </p>
+          )
+        })}
+      </section>
+      <table aria-label="Player values">
         <thead>
           <tr>
             <th scope="col">Player</th>
