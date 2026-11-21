@@ -1,5 +1,6 @@
 import { createContext, useEffect, useRef, useState } from 'react'
 import { fetchLeagueData, fetchLeaguesForUsername } from './sleeperApi.js'
+import Dashboard from './Dashboard.jsx'
 
 export const LeagueDataContext = createContext(null)
 
@@ -194,12 +195,12 @@ function App() {
       )}
 
       {confirmedSelection && leagueData && (
-        <section aria-label="Next step">
-          <h2>Next step</h2>
+        <>
           <p>League: {confirmedSelection.leagueName}</p>
           <p>Season: {confirmedSelection.season}</p>
           <p>League ID: {confirmedSelection.leagueId}</p>
-        </section>
+          <Dashboard leagueData={leagueData} />
+        </>
       )}
     </LeagueDataContext.Provider>
   )

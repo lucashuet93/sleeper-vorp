@@ -78,7 +78,7 @@ test('finds leagues, lets the user choose a season, and confirms the selection',
   expect(continueButton.disabled).toBe(false)
   fireEvent.click(continueButton)
 
-  expect(await screen.findByRole('region', { name: 'Next step' })).toBeTruthy()
+  expect(await screen.findByRole('region', { name: 'VORP and VORS dashboard' })).toBeTruthy()
   expect(screen.getByText('Season: ' + currentSeason)).toBeTruthy()
   expect(screen.getByText('League ID: league-current')).toBeTruthy()
 })
@@ -140,7 +140,7 @@ test('shows an error when the username is not found', async () => {
     fireEvent.change(screen.getByLabelText('Season'), { target: { value: previous } })
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     expect((await screen.findByRole('alert')).textContent).toMatch(/Player data is not available for this season/)
-    expect(screen.queryByRole('region', { name: 'Next step' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'VORP and VORS dashboard' })).toBeNull()
   })
 
   test.each(['success', 'error'])('ignores a stale %s after changing league and completing a new load', async (outcome) => {
@@ -231,6 +231,6 @@ test.each(['username', 'season'])('invalidates an in-flight load when %s changes
   }
   expect(fetchData.mock.calls[0][2].signal.aborted).toBe(true)
   await act(async () => { resolveLoad({ league: { season: current } }); await load })
-  expect(screen.queryByRole('region', { name: 'Next step' })).toBeNull()
+  expect(screen.queryByRole('region', { name: 'VORP and VORS dashboard' })).toBeNull()
   expect(screen.queryByText('Loading league data…')).toBeNull()
 })
