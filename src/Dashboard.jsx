@@ -5,12 +5,18 @@ import { calculateSummaryInsights } from './summaryInsights.js'
 
 const POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K']
 const METRICS = [['vorp', 'VORP'], ['vors', 'VORS']]
+const PLAYER_METRICS = [...METRICS, ['vorpPerGame', 'VORP/G'], ['vorsPerGame', 'VORS/G']]
+const VALUE_COLUMNS = [
+  ['fantasyPoints', 'Fantasy points'],
+  ['fantasyPointsPerGame', 'Fantasy points/G'],
+  ...PLAYER_METRICS,
+]
 
-function RankedTable({ entries, metric, title }) {
+function RankedTable({ entries, metric, label, title }) {
   return (
     <table aria-label={title}>
       <thead>
-        <tr><th scope="col">Rank</th><th scope="col">Name</th><th scope="col">{metric.toUpperCase()}</th></tr>
+        <tr><th scope="col">Rank</th><th scope="col">Name</th><th scope="col">{label}</th></tr>
       </thead>
       <tbody>
         {entries.map((entry, index) => (
@@ -20,7 +26,7 @@ function RankedTable({ entries, metric, title }) {
             <td>{entry[metric].toFixed(2)}</td>
           </tr>
         ))}
-        {entries.length === 0 && <tr><td colSpan="3">No {metric.toUpperCase()} values available.</td></tr>}
+        {entries.length === 0 && <tr><td colSpan="3">No {label} values available.</td></tr>}
       </tbody>
     </table>
   )
@@ -44,7 +50,7 @@ function Dashboard({ leagueData, onRefresh, loading, lastUpdated }) {
       Object.entries(directory).filter(([, player]) => {
         const stats = player?.stats ?? player?.projections
         return stats && typeof stats === 'object' &&
-          Object.values(stats).some(Number.isFinite)
+          Object.entries(stats).some(([stat, value]) => stat !== 'gp' && Number.isFinite(value))
       }),
     )
     const vorp = canCalculate ? calculateVorp({
@@ -66,8 +72,11 @@ function Dashboard({ leagueData, onRefresh, loading, lastUpdated }) {
         name: player.full_name || [player.first_name, player.last_name].filter(Boolean).join(' ') || id,
         position: player.position.toUpperCase(),
         fantasyPoints: values[id]?.fantasyPoints ?? null,
+        fantasyPointsPerGame: values[id]?.fantasyPointsPerGame ?? null,
         vorp: values[id]?.vorp ?? null,
         vors: values[id]?.vors ?? null,
+        vorpPerGame: values[id]?.vorpPerGame ?? null,
+        vorsPerGame: values[id]?.vorsPerGame ?? null,
         teamId: player.roster?.rosterId ?? player.roster?.ownerId ?? null,
       }))
   }, [leagueData, method])
@@ -122,21 +131,21 @@ function Dashboard({ leagueData, onRefresh, loading, lastUpdated }) {
       )}
       <section aria-label="Summary insights">
         <h3>Top players overall</h3>
-        {METRICS.map(([metric, label]) => (
-          <RankedTable key={metric} title={`Top players overall by ${label}`} entries={insights.topPlayers[metric]} metric={metric} />
+        {PLAYER_METRICS.map(([metric, label]) => (
+          <RankedTable key={metric} title={`Top players overall by ${label}`} entries={insights.topPlayers[metric]} metric={metric} label={label} />
         ))}
         <h3>Top players by position</h3>
         {POSITIONS.map((item) => (
           <section key={item} aria-label={`Top ${item} players`}>
             <h4>{item}</h4>
-            {METRICS.map(([metric, label]) => (
-              <RankedTable key={metric} title={`Top ${item} players by ${label}`} entries={insights.positionPlayers[item][metric]} metric={metric} />
+            {PLAYER_METRICS.map(([metric, label]) => (
+              <RankedTable key={metric} title={`Top ${item} players by ${label}`} entries={insights.positionPlayers[item][metric]} metric={metric} label={label} />
             ))}
           </section>
         ))}
         <h3>Top teams</h3>
         {METRICS.map(([metric, label]) => (
-          <RankedTable key={metric} title={`Top teams by ${label}`} entries={insights.topTeams[metric]} metric={metric} />
+          <RankedTable key={metric} title={`Top teams by ${label}`} entries={insights.topTeams[metric]} metric={metric} label={label} />
         ))}
         <h3>Largest positional advantage</h3>
         {METRICS.map(([metric, label]) => {
@@ -155,7 +164,7 @@ function Dashboard({ leagueData, onRefresh, loading, lastUpdated }) {
           <tr>
             <th scope="col">Player</th>
             <th scope="col">Position</th>
-            {[['fantasyPoints', 'Fantasy points'], ['vorp', 'VORP'], ['vors', 'VORS']].map(([field, label]) => (
+            {VALUE_COLUMNS.map(([field, label]) => (
               <th key={field} scope="col" aria-sort={sort.field === field ? (sort.direction === 'desc' ? 'descending' : 'ascending') : 'none'}>
                 <button type="button" onClick={() => changeSort(field)}>{label}</button>
               </th>
@@ -167,9 +176,9 @@ function Dashboard({ leagueData, onRefresh, loading, lastUpdated }) {
             <tr key={player.id}>
               <th scope="row">{player.name}</th>
               <td>{player.position}</td>
-              <td>{player.fantasyPoints == null ? '—' : player.fantasyPoints.toFixed(2)}</td>
-              <td>{player.vorp == null ? '—' : player.vorp.toFixed(2)}</td>
-              <td>{player.vors == null ? '—' : player.vors.toFixed(2)}</td>
+              {VALUE_COLUMNS.map(([field]) => (
+                <td key={field}>{player[field] == null ? '—' : player[field].toFixed(2)}</td>
+              ))}
             </tr>
           ))}
         </tbody>

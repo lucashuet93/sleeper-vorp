@@ -30,7 +30,7 @@ test('displays calculated values and filters positions without recalculating bas
 
   expect(row('Quarterback One').getByText('100.00')).toBeTruthy()
   expect(row('Quarterback One').getAllByText('30.00')).toHaveLength(2)
-  expect(row('Unknown Player').getAllByText('—')).toHaveLength(3)
+  expect(row('Unknown Player').getAllByText('—')).toHaveLength(6)
   expect(screen.getByText(/unavailable without player performance data/)).toBeTruthy()
 
   fireEvent.click(screen.getByRole('button', { name: 'QB' }))
@@ -76,17 +76,54 @@ test('sorts each value in both directions and keeps unavailable values last', ()
 
 test('does not display fabricated scores when league settings are unavailable', () => {
   render(<Dashboard leagueData={{ ...leagueData, scoringSettings: {} }} />)
-  expect(row('Quarterback One').getAllByText('—')).toHaveLength(3)
+  expect(row('Quarterback One').getAllByText('—')).toHaveLength(6)
   expect(screen.getByText(/unavailable without player performance data/)).toBeTruthy()
 })
 
 test.each([[], undefined])('does not display fabricated scores without roster settings (%s)', (rosterSettings) => {
   render(<Dashboard leagueData={{ ...leagueData, rosterSettings }} />)
-  expect(row('Quarterback One').getAllByText('—')).toHaveLength(3)
+  expect(row('Quarterback One').getAllByText('—')).toHaveLength(6)
   expect(screen.getByText(/unavailable without player performance data/)).toBeTruthy()
 
   fireEvent.change(screen.getByLabelText('Replacement-level method'), { target: { value: 'free-agent' } })
-  expect(row('Quarterback One').getAllByText('—')).toHaveLength(3)
+  expect(row('Quarterback One').getAllByText('—')).toHaveLength(6)
+})
+
+test('displays and sorts per-game values and ranks players without changing season totals', () => {
+  const data = {
+    ...leagueData,
+    players: {
+      q1: { full_name: 'Quarterback One', position: 'QB', stats: { pass_yd: 100, gp: 10 }, rosterStatus: 'rostered' },
+      q2: { full_name: 'Quarterback Two', position: 'QB', stats: { pass_yd: 70, gp: 5 }, rosterStatus: 'rostered' },
+      q3: { full_name: 'Quarterback Three', position: 'QB', stats: { pass_yd: 40, gp: 2 }, rosterStatus: 'free_agent' },
+      partial: { full_name: 'Partial', position: 'QB', stats: { pass_yd: 20 }, rosterStatus: 'free_agent' },
+      gamesOnly: { full_name: 'Games Only', position: 'QB', stats: { gp: 4 } },
+    },
+  }
+  render(<Dashboard leagueData={data} />)
+
+  expect(row('Quarterback One').getByText('100.00')).toBeTruthy()
+  expect(row('Quarterback One').getByText('10.00')).toBeTruthy()
+  expect(row('Quarterback One').getAllByText('-4.00')).toHaveLength(2)
+  expect(row('Partial').getAllByText('—')).toHaveLength(3)
+  expect(row('Games Only').getAllByText('—')).toHaveLength(6)
+  const summary = within(screen.getByRole('region', { name: 'Summary insights' }))
+  for (const label of ['VORP/G', 'VORS/G']) {
+    expect(within(summary.getByRole('table', { name: `Top players overall by ${label}` }))
+      .getAllByRole('rowheader')[0].textContent).toBe('Quarterback Three')
+    expect(within(summary.getByRole('table', { name: `Top QB players by ${label}` }))
+      .getAllByRole('rowheader')[0].textContent).toBe('Quarterback Three')
+    fireEvent.click(screen.getByRole('button', { name: label }))
+    expect(playerOrder()[0]).toBe('Quarterback Three')
+    fireEvent.click(screen.getByRole('button', { name: label }))
+    expect(playerOrder()[0]).toBe('Quarterback One')
+    expect(playerOrder().at(-1)).toBe('Games Only')
+  }
+  fireEvent.click(screen.getByRole('button', { name: 'Fantasy points/G' }))
+  expect(playerOrder()[0]).toBe('Quarterback Three')
+  fireEvent.change(screen.getByLabelText('Replacement-level method'), { target: { value: 'free-agent' } })
+  expect(row('Quarterback One').getByText('-10.00')).toBeTruthy()
+  expect(row('Quarterback One').getByText('-4.00')).toBeTruthy()
 })
 
 test('displays overall and positional player rankings, team totals, and positional advantage', () => {

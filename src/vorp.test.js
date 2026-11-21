@@ -126,23 +126,101 @@ test('accepts array input, ignores unsupported positions, and handles missing st
       position: 'RB',
       projections: { rush_yd: 10 },
       fantasyPoints: 1,
+      fantasyPointsPerGame: null,
       positionRank: 1,
       replacementPoints: 0,
       vorp: 1,
+      vorpPerGame: null,
     },
     p3: {
       player_id: 'p3',
       position: 'RB',
       fantasyPoints: 0,
+      fantasyPointsPerGame: null,
       positionRank: 2,
       replacementPoints: 0,
       vorp: 0,
+      vorpPerGame: null,
     },
   })
 })
+
+test.each(['QB', 'RB', 'WR', 'TE', 'K'])('uses the season-total %s replacement player for per-game values', (position) => {
+    const result = calculateVorp({
+      players: {
+        first: { position, stats: { rec: 100, gp: 10 }, rosterStatus: 'rostered' },
+        baseline: { position, stats: { rec: 80, gp: 4 }, rosterStatus: 'free_agent' },
+        other: { position, stats: { rec: 60, gp: 2 }, rosterStatus: 'free_agent' },
+      },
+      scoringSettings: { rec: 1 },
+      rosterSettings: [position],
+      totalRosters: 1,
+    })
+
+    expect(result.first).toMatchObject({ fantasyPoints: 100, fantasyPointsPerGame: 10, vorp: 20, vorpPerGame: -10 })
+    expect(result.baseline.vorpPerGame).toBe(0)
+    expect(result.other.vorpPerGame).toBe(10)
+  })
+
+  test('uses the highest season-total free agent as the per-game baseline', () => {
+    const result = calculateVorp({
+      players: {
+        starter: { position: 'QB', stats: { pass_yd: 100, gp: 10 }, rosterStatus: 'rostered' },
+        first: { position: 'QB', stats: { pass_yd: 80, gp: 8 }, rosterStatus: 'free_agent' },
+        second: { position: 'QB', stats: { pass_yd: 60, gp: 2 }, rosterStatus: 'free_agent' },
+      },
+      scoringSettings: { pass_yd: 1 },
+      rosterSettings: ['QB'],
+      totalRosters: 1,
+      replacementMethod: 'free-agent',
+    })
+    expect(result.starter.vorpPerGame).toBe(0)
+    expect(result.second.vorpPerGame).toBe(20)
+  })
+
+  test.each([undefined, null, 0, -1, 1.5, '4', Infinity])('does not estimate per-game values with invalid games played: %s', (gp) => {
+    const result = calculateVorp({
+      players: {
+        first: { position: 'QB', stats: { pass_yd: 100, gp } },
+        baseline: { position: 'QB', stats: { pass_yd: 50, gp: 5 } },
+      },
+      scoringSettings: { pass_yd: 1 },
+      rosterSettings: ['QB'],
+      totalRosters: 1,
+    })
+    expect(result.first).toMatchObject({ fantasyPoints: 100, fantasyPointsPerGame: null, vorpPerGame: null })
+    expect(result.baseline.vorpPerGame).toBe(0)
+  })
+
+  test('leaves per-game VORP unavailable when the baseline has no games played or does not exist', () => {
+    const options = {
+      players: {
+        first: { position: 'QB', stats: { pass_yd: 100, gp: 10 } },
+        baseline: { position: 'QB', stats: { pass_yd: 50 } },
+      },
+      scoringSettings: { pass_yd: 1 },
+      rosterSettings: ['QB'],
+      totalRosters: 1,
+    }
+    expect(calculateVorp(options).first).toMatchObject({ fantasyPointsPerGame: 10, vorp: 50, vorpPerGame: null })
+    expect(calculateVorp({ ...options, totalRosters: 3 }).first.vorpPerGame).toBeNull()
+    expect(calculateVorp({ ...options, replacementMethod: 'free-agent' }).first.vorpPerGame).toBeNull()
+  })
 
 test('rejects unknown replacement methods', () => {
   expect(() => calculateVorp({ replacementMethod: 'average' })).toThrow(
     'replacementMethod must be "free-agent" or "rank-based"',
   )
+})
+
+test('does not derive per-game points from games played alone or projections', () => {
+  const result = calculateVorp({
+    players: {
+      gamesOnly: { position: 'QB', stats: { gp: 4 } },
+      projection: { position: 'QB', projections: { pass_yd: 100, gp: 4 } },
+    },
+    scoringSettings: { pass_yd: 1 },
+  })
+  expect(result.gamesOnly.fantasyPointsPerGame).toBeNull()
+  expect(result.projection.fantasyPointsPerGame).toBeNull()
 })

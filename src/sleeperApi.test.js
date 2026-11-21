@@ -83,7 +83,7 @@ test('fresh loads refetch the directory and season performance without using the
       return Promise.resolve(response({ p1: { position: 'QB', full_name: `Player ${version}` } }))
     }
     if (url === `https://api.sleeper.com/stats/nfl/${season}?season_type=regular`) {
-      return Promise.resolve(response([{ player_id: 'p1', stats: { pass_td: version } }]))
+      return Promise.resolve(response([{ player_id: 'p1', stats: { pass_td: version, gp: 4 } }]))
     }
     return normal(url, options)
   })
@@ -91,8 +91,8 @@ test('fresh loads refetch the directory and season performance without using the
   await fetchLeagueData('123', season, { fetchImpl })
   const first = await fetchLeagueData('123', season, { fetchImpl, fresh: true })
   const second = await fetchLeagueData('123', season, { fetchImpl, fresh: true })
-  expect(first.players.p1).toMatchObject({ full_name: 'Player 2', stats: { pass_td: 2 }, rosterStatus: 'rostered' })
-  expect(second.players.p1).toMatchObject({ full_name: 'Player 3', stats: { pass_td: 3 } })
+  expect(first.players.p1).toMatchObject({ full_name: 'Player 2', stats: { pass_td: 2, gp: 4 }, rosterStatus: 'rostered' })
+  expect(second.players.p1).toMatchObject({ full_name: 'Player 3', stats: { pass_td: 3, gp: 4 } })
   expect(second.playerDirectory).toBe(second.players)
   expect(fetchImpl.mock.calls.filter(([url]) => url.includes('/stats/nfl/'))).toHaveLength(2)
 })
