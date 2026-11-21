@@ -63,6 +63,21 @@ is `null` until loading succeeds and is cleared when the selection changes.
 Changing the username or selection invalidates pending loads so old results
 cannot replace the new selection.
 
+## Calculating VORS
+
+`calculateVors` in `src/vors.js` accepts a player directory, the league's
+`rosterSettings`, and `total_rosters`. Each player needs a supported `position`
+and numeric `projectedPoints` value. It returns the directory with a `vors`
+value on each player, plus `replacementBaselines` for QB, RB, WR, TE, and K.
+The baseline is the projected score of the first player outside the
+league-wide starter count for that position; a baseline is `null` when the
+league has no starter slots for the position or the player pool is too small.
+Shared FLEX and `SUPER_FLEX` slots are allocated once across eligible positions
+to maximize projected starter scores. `SUPER_FLEX` can be filled by QB, RB, WR,
+or TE. `startersPerTeam` is the league-wide allocated starter count divided by
+the number of rosters, so it can be fractional when shared slots are allocated
+differently across the league.
+
 ## VORP calculation
 
 `calculateVorp` in `src/vorp.js` calculates fantasy points from a player's
