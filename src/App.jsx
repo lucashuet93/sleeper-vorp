@@ -4,6 +4,9 @@ import Dashboard from './Dashboard.jsx'
 
 export const LeagueDataContext = createContext(null)
 
+const fieldClass = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-2 focus:outline-offset-2 focus:outline-blue-600'
+const buttonClass = 'rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:opacity-50'
+
 function App() {
   const [username, setUsername] = useState('')
   const [leagues, setLeagues] = useState([])
@@ -119,11 +122,17 @@ function App() {
 
   return (
     <LeagueDataContext.Provider value={leagueData}>
-      <h1>Sleeper VORP</h1>
-      <form onSubmit={handleSubmit}>
-        <label htmlFor="sleeper-username">Sleeper username</label>
+      <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+      <header>
+        <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Fantasy football analytics</p>
+        <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">Sleeper VORP</h1>
+      </header>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-end">
+        <div className="w-full sm:max-w-sm">
+        <label htmlFor="sleeper-username" className="mb-1 block text-sm font-semibold text-slate-700">Sleeper username</label>
         <input
           id="sleeper-username"
+          className={fieldClass}
           value={username}
           onChange={(event) => {
             invalidateRequests()
@@ -135,22 +144,25 @@ function App() {
           }}
           required
         />
-        <button type="submit" disabled={loading}>
+        </div>
+        <button type="submit" disabled={loading} className={buttonClass}>
           {loading ? 'Loading leagues…' : 'Find leagues'}
         </button>
       </form>
 
-      {loading && <p role="status">Loading your leagues…</p>}
-      {error && <p role="alert">{error}</p>}
+      {loading && <p role="status" className="text-sm text-slate-600">Loading your leagues…</p>}
+      {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</p>}
       {!loading && !error && hasSearched && leagues.length === 0 && (
-        <p role="status">No leagues found for this Sleeper username.</p>
+        <p role="status" className="text-sm text-slate-600">No leagues found for this Sleeper username.</p>
       )}
 
       {leagues.length > 0 && !confirmedSelection && (
-        <section aria-label="League and season selection">
-          <label htmlFor="league">League</label>
+        <section aria-label="League and season selection" className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-end sm:flex-wrap">
+          <div className="w-full sm:w-64">
+          <label htmlFor="league" className="mb-1 block text-sm font-semibold text-slate-700">League</label>
           <select
             id="league"
+            className={fieldClass}
             value={selectedLeagueId}
             onChange={(event) => {
               invalidateRequests()
@@ -166,12 +178,14 @@ function App() {
               </option>
             ))}
           </select>
+          </div>
 
           {selectedLeague && (
-            <>
-              <label htmlFor="season">Season</label>
+            <div className="w-full sm:w-40">
+              <label htmlFor="season" className="mb-1 block text-sm font-semibold text-slate-700">Season</label>
               <select
                 id="season"
+                className={fieldClass}
                 value={selectedSeason}
                 onChange={(event) => {
                   invalidateRequests()
@@ -189,25 +203,30 @@ function App() {
                   </option>
                 ))}
               </select>
-            </>
+            </div>
           )}
 
           <button
             type="button"
             disabled={!selectedLeague || !selectedSeasonRecord || loadingLeague}
             onClick={handleContinue}
+            className={buttonClass}
           >
             Continue
           </button>
-          {loadingLeague && <p role="status">Loading league data…</p>}
+          {loadingLeague && <p role="status" className="text-sm text-slate-600">Loading league data…</p>}
         </section>
       )}
 
       {confirmedSelection && leagueData && (
         <>
-          <p>League: {confirmedSelection.leagueName}</p>
-          <p>Season: {confirmedSelection.season}</p>
-          <p>League ID: {confirmedSelection.leagueId}</p>
+          <div className="rounded-xl border border-blue-100 bg-blue-50 px-5 py-4">
+            <p className="text-xl font-bold text-slate-900">League: {confirmedSelection.leagueName}</p>
+            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">
+              <p>Season: {confirmedSelection.season}</p>
+              <p>League ID: {confirmedSelection.leagueId}</p>
+            </div>
+          </div>
           <Dashboard
             leagueData={leagueData}
             onRefresh={() => loadLeague(confirmedSelection)}
@@ -216,6 +235,7 @@ function App() {
           />
         </>
       )}
+      </main>
     </LeagueDataContext.Provider>
   )
 }

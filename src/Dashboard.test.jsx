@@ -25,6 +25,22 @@ function playerOrder() {
     .getAllByRole('row').slice(1).map((item) => within(item).getByRole('rowheader').textContent)
 }
 
+test('keeps the player table keyboard-scrollable and indicates the selected sort and position', () => {
+  render(<Dashboard leagueData={leagueData} />)
+
+  const scrollRegion = screen.getByRole('region', { name: 'Scrollable player values' })
+  expect(scrollRegion.tabIndex).toBe(0)
+  expect(scrollRegion.className).toContain('overflow-x-auto')
+  expect(within(scrollRegion).getByRole('table', { name: 'Player values' })).toBeTruthy()
+  const sortButton = within(scrollRegion).getByRole('button', { name: 'VORP' })
+  expect(sortButton.textContent).toContain('↓')
+  fireEvent.click(sortButton)
+  expect(sortButton.textContent).toContain('↑')
+  expect(screen.getByRole('button', { name: 'All' }).className).toContain('bg-blue-700')
+  fireEvent.click(screen.getByRole('button', { name: 'QB' }))
+  expect(screen.getByRole('button', { name: 'QB' }).className).toContain('bg-blue-700')
+})
+
 test('displays calculated values and filters positions without recalculating baselines', () => {
   render(<Dashboard leagueData={leagueData} />)
 
