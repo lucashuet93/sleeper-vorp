@@ -86,6 +86,14 @@ export async function fetchLeaguesForUsername(username, fetchImpl = fetch) {
 const REQUEST_TIMEOUT_MS = 15000
 const playerDirectories = new WeakMap()
 
+function validatePlayerDirectory(players) {
+  if (!players || typeof players !== 'object' || Array.isArray(players) ||
+      Object.keys(players).length === 0) {
+    throw requestError('request_failed')
+  }
+  return players
+}
+
 function requestError(code) {
   return new Error(code)
 }
@@ -144,13 +152,7 @@ function getPlayerDirectory(fetchImpl, season) {
   let request = directories.get(season)
   if (!request) {
     request = requestJson(`${API_BASE_URL}/players/nfl`, fetchImpl)
-      .then((players) => {
-        if (!players || typeof players !== 'object' || Array.isArray(players) ||
-            Object.keys(players).length === 0) {
-          throw requestError('request_failed')
-        }
-        return players
-      })
+      .then(validatePlayerDirectory)
       .catch((error) => {
         directories.delete(season)
         throw error
@@ -175,7 +177,7 @@ async function waitForPlayerDirectory(fetchImpl, season, signal) {
   }
 }
 
-export async function fetchLeagueData(leagueId, season, { fetchImpl = fetch, signal } = {}) {
+export async function fetchLeagueData(leagueId, season, { fetchImpl = fetch, signal, fresh = false } = {}) {
   const leagueUrl = `${API_BASE_URL}/league/${encodeURIComponent(leagueId)}`
   const league = await requestJson(leagueUrl, fetchImpl, { signal, league: true })
   if (!league || !league.league_id) throw requestError('league_not_found')
@@ -194,9 +196,24 @@ export async function fetchLeagueData(leagueId, season, { fetchImpl = fetch, sig
   if (String(state.season) !== String(season)) throw requestError('unsupported_season')
   if (!Array.isArray(users) || !Array.isArray(rosters)) throw requestError('request_failed')
 
-  const players = await waitForPlayerDirectory(fetchImpl, String(state.season), signal)
+  const [players, performance] = await Promise.all([
+    fresh
+      ? requestJson(`${API_BASE_URL}/players/nfl`, fetchImpl, { signal }).then(validatePlayerDirectory)
+      : waitForPlayerDirectory(fetchImpl, String(state.season), signal),
+    fresh
+      ? requestJson(`https://api.sleeper.com/stats/nfl/${encodeURIComponent(season)}?season_type=regular`, fetchImpl, { signal })
+      : Promise.resolve(null),
+  ])
   if (signal?.aborted) throw requestError('request_cancelled')
+  if (fresh && !Array.isArray(performance)) throw requestError('request_failed')
+  const statsByPlayer = new Map((performance ?? [])
+    .filter((entry) => entry?.player_id != null && entry.stats &&
+      typeof entry.stats === 'object' && !Array.isArray(entry.stats))
+    .map((entry) => [String(entry.player_id), entry.stats]))
   const labeledPlayers = labelPlayersByRoster(players, rosters, users)
+  for (const [id, player] of Object.entries(labeledPlayers)) {
+    if (statsByPlayer.has(id)) player.stats = statsByPlayer.get(id)
+  }
   return {
     league,
     scoringSettings: league.scoring_settings ?? {},

@@ -19,9 +19,11 @@ Run the test suite with `npm test` and create a production build with `npm run b
 
 After loading a league, filter players by position and sort by fantasy points,
 VORP, or VORS using the column headings. The replacement-level selector changes
-the VORP baseline; VORS always uses its starter-based baseline. The player
-directory does not include performance data, so values are shown as unavailable
-unless player stats or projections and league settings are supplied.
+the VORP baseline; VORS always uses its starter-based baseline. Dashboard loads
+fetch current regular-season player statistics along with the league and player
+directory. Values are unavailable for players without performance data or when
+league settings are missing. Use Refresh to fetch the data again; Last updated
+shows the local time of the most recent successful load.
 
 ## Loading league data
 
@@ -55,6 +57,8 @@ Sleeper's global directory does not establish historical player eligibility.
 The directory is shared in memory per season for the browser session, including
 in-flight loads; failures and empty directories are not cached. Individual
 callers can cancel their load without aborting a shared directory download.
+The dashboard uses `{ fresh: true }` to bypass that cache and fetch
+regular-season statistics from Sleeper on each initial load and refresh.
 
 Errors are `Error` objects with these `message` codes:
 
