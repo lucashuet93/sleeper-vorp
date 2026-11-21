@@ -44,3 +44,52 @@ test('sums team aggregates and finds the strongest positional surplus over leagu
     team: { name: 'Team A' },
   })
 })
+
+test('counts empty positions as zero when finding positional advantages', () => {
+  const result = calculateSummaryInsights([
+    { position: 'QB', teamId: '1', vorp: 10, vors: 10 },
+    { position: 'RB', teamId: '1', vorp: 20, vors: 20 },
+    { position: 'RB', teamId: '2', vorp: 18, vors: 18 },
+  ], [{ roster_id: 1 }, { roster_id: 2 }])
+
+  for (const metric of ['vorp', 'vors']) {
+    expect(result.positionalAdvantages[metric]).toMatchObject({
+      position: 'QB',
+      value: 5,
+      team: { id: '1' },
+    })
+  }
+})
+
+test('excludes unavailable position scores while counting empty positions', () => {
+  const result = calculateSummaryInsights([
+    { position: 'QB', teamId: '1', vorp: 12, vors: null },
+    { position: 'QB', teamId: '2', vorp: null, vors: 6 },
+    { position: 'RB', teamId: '1', vorp: null, vors: null },
+  ], [{ roster_id: 1 }, { roster_id: 2 }, { roster_id: 3 }])
+
+  expect(result.positionalAdvantages.vorp).toMatchObject({
+    position: 'QB', value: 6, team: { id: '1' },
+  })
+  expect(result.positionalAdvantages.vors).toMatchObject({
+    position: 'QB', value: 3, team: { id: '2' },
+  })
+})
+
+test('skips positions without measured scores and allows empty positions to lead', () => {
+  const rosters = [{ roster_id: 1 }, { roster_id: 2 }]
+  const unavailable = calculateSummaryInsights([
+    { position: 'QB', teamId: '1', vorp: null, vors: null },
+  ], rosters)
+  expect(unavailable.positionalAdvantages).toEqual({ vorp: null, vors: null })
+
+  const negative = calculateSummaryInsights([
+    { position: 'QB', teamId: '1', vorp: -10, vors: -4 },
+  ], rosters)
+  expect(negative.positionalAdvantages.vorp).toMatchObject({
+    position: 'QB', value: 5, team: { id: '2' },
+  })
+  expect(negative.positionalAdvantages.vors).toMatchObject({
+    position: 'QB', value: 2, team: { id: '2' },
+  })
+})

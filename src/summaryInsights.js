@@ -72,10 +72,14 @@ export function calculateSummaryInsights(players, rosters = [], users = []) {
     METRICS.map((metric) => {
       let largest = null
       POSITIONS.forEach((position) => {
-        const totals = teamAggregates
-          .map((team) => ({ team, value: team.positionalTotals[position][metric] }))
+        const positionTotals = teamAggregates.map((team, index) => {
+          const value = team.positionalTotals[position][metric]
+          const empty = !teams[index].members.some((player) => player.position === position)
+          return { team, value: empty ? 0 : value, measured: Number.isFinite(value) }
+        })
+        if (!positionTotals.some(({ measured }) => measured)) return
+        const totals = positionTotals
           .filter(({ value }) => Number.isFinite(value))
-        if (!totals.length) return
         const average = totals.reduce((total, entry) => total + entry.value, 0) / totals.length
         totals.forEach(({ team, value }) => {
           const advantage = value - average
