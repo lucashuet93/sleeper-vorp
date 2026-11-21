@@ -254,3 +254,22 @@ test('leaves VORS null when no replacement player is available', () => {
   expect(result.players.K1.vors).toBeNull()
   expect(result.players.K2.vors).toBeNull()
 })
+
+test('calculates per-game VORS from the season-total starter baseline', () => {
+  const players = {
+    first: { position: 'RB', fantasyPoints: 100, fantasyPointsPerGame: 10 },
+    baseline: { position: 'RB', fantasyPoints: 80, fantasyPointsPerGame: 20 },
+    other: { position: 'RB', fantasyPoints: 60, fantasyPointsPerGame: 30 },
+    missing: { position: 'RB', fantasyPoints: 40, fantasyPointsPerGame: null },
+  }
+  const result = calculateVors(players, ['RB'], 1, 'fantasyPoints')
+  expect(result.players.first).toMatchObject({ vors: 20, vorsPerGame: -10 })
+  expect(result.players.baseline.vorsPerGame).toBe(0)
+  expect(result.players.other.vorsPerGame).toBe(10)
+  expect(result.players.missing.vorsPerGame).toBeNull()
+
+  players.baseline.fantasyPointsPerGame = null
+  expect(calculateVors(players, ['RB'], 1, 'fantasyPoints').players.first)
+    .toMatchObject({ vors: 20, vorsPerGame: null })
+  expect(calculateVors(players, ['RB'], 4, 'fantasyPoints').players.first.vorsPerGame).toBeNull()
+})

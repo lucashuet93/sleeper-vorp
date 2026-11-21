@@ -81,11 +81,16 @@ export function calculateVorp({
       ? player.position.toUpperCase()
       : ''
     if (!byPosition[position]) return
+    const fantasyPoints = scorePlayer(player, settings)
+    const gamesPlayed = player.stats?.gp
     byPosition[position].push({
       playerId,
       player,
       index,
-      fantasyPoints: scorePlayer(player, settings),
+      fantasyPoints,
+      fantasyPointsPerGame: Number.isInteger(gamesPlayed) && gamesPlayed > 0
+        ? fantasyPoints / gamesPlayed
+        : null,
     })
   })
 
@@ -96,24 +101,23 @@ export function calculateVorp({
         right.fantasyPoints - left.fantasyPoints || left.index - right.index,
     )
     const replacementRank = getReplacementRank(position, slots, totalRosters)
-    const replacementPoints = replacementMethod === 'free-agent'
-      ? rankedPlayers.reduce((best, entry) => {
-          if (entry.player.rosterStatus !== 'free_agent') return best
-          return best === null || entry.fantasyPoints > best
-            ? entry.fantasyPoints
-            : best
-        }, null) ?? 0
-      : replacementRank == null
-        ? 0
-        : rankedPlayers[replacementRank - 1]?.fantasyPoints ?? 0
+    const replacement = replacementMethod === 'free-agent'
+      ? rankedPlayers.find((entry) => entry.player.rosterStatus === 'free_agent')
+      : replacementRank == null ? null : rankedPlayers[replacementRank - 1]
+    const replacementPoints = replacement?.fantasyPoints ?? 0
+    const replacementPointsPerGame = replacement?.fantasyPointsPerGame ?? null
 
     rankedPlayers.forEach((entry, index) => {
       results[entry.playerId] = {
         ...entry.player,
         fantasyPoints: entry.fantasyPoints,
+        fantasyPointsPerGame: entry.fantasyPointsPerGame,
         positionRank: index + 1,
         replacementPoints,
         vorp: entry.fantasyPoints - replacementPoints,
+        vorpPerGame: entry.fantasyPointsPerGame != null && replacementPointsPerGame != null
+          ? entry.fantasyPointsPerGame - replacementPointsPerGame
+          : null,
       }
     })
   })

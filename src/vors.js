@@ -188,6 +188,7 @@ export function calculateVors(
   )
   const replacementBaselines = {}
   const vorsByPlayerId = {}
+  const vorsPerGameByPlayerId = {}
 
   SUPPORTED_POSITIONS.forEach((position) => {
     const starterCount =
@@ -204,6 +205,9 @@ export function calculateVors(
       replacementRank <= rankedPlayers.length
       ? rankedPlayers[replacementRank - 1][1][scoreField]
       : null
+    const replacementPerGame = scoreField === 'fantasyPoints' && replacementScore != null
+      ? rankedPlayers[replacementRank - 1][1].fantasyPointsPerGame
+      : null
 
     replacementBaselines[position] = {
       startersPerTeam:
@@ -218,6 +222,10 @@ export function calculateVors(
       vorsByPlayerId[playerId] = replacementScore == null
         ? null
         : player[scoreField] - replacementScore
+      vorsPerGameByPlayerId[playerId] = Number.isFinite(player.fantasyPointsPerGame) &&
+        Number.isFinite(replacementPerGame)
+        ? player.fantasyPointsPerGame - replacementPerGame
+        : null
     })
   })
 
@@ -225,7 +233,7 @@ export function calculateVors(
     players: Object.fromEntries(
       Object.entries(players).map(([playerId, player]) => [
         playerId,
-        { ...player, vors: vorsByPlayerId[playerId] ?? null },
+        { ...player, vors: vorsByPlayerId[playerId] ?? null, vorsPerGame: vorsPerGameByPlayerId[playerId] ?? null },
       ]),
     ),
     replacementBaselines,
