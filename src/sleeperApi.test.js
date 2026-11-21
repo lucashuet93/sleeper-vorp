@@ -98,7 +98,7 @@ test('fresh loads refetch the directory and season performance without using the
 })
 
 test('a failed or invalid season statistics response fails the fresh load', async () => {
-  for (const result of [response(null, 503), response({ invalid: true })]) {
+  for (const result of [response(null, 503), response({ invalid: true }), response([{ message: 'unavailable' }])]) {
     const fetchImpl = mockApi()
     const normal = fetchImpl.getMockImplementation()
     fetchImpl.mockImplementation((url, options) => url.includes('/stats/nfl/')

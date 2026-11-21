@@ -27,6 +27,7 @@ test('loads and refreshes the dashboard, retaining the last successful data on f
     let finishRefresh
     let pending = false
     let fail = false
+    let invalidStats = false
     global.fetch.mockImplementation((url) => {
       if (url.endsWith('/user/fan')) return Promise.resolve(response({ user_id: 'u' }))
       if (url.includes('/leagues/nfl/')) return Promise.resolve(response(url.endsWith(season)
@@ -45,7 +46,7 @@ test('loads and refreshes the dashboard, retaining the last successful data on f
         p1: { position: 'QB', full_name: 'First QB' },
         p2: { position: 'QB', full_name: 'Second QB' },
       }))
-      if (url.includes('/stats/nfl/')) return Promise.resolve(response([
+      if (url.includes('/stats/nfl/')) return Promise.resolve(response(invalidStats ? [{ message: 'unavailable' }] : [
         { player_id: 'p1', stats: { pass_yd: version === 1 ? 100 : 200 } },
         { player_id: 'p2', stats: { pass_yd: 50 } },
       ]))
@@ -91,6 +92,12 @@ test('loads and refreshes the dashboard, retaining the last successful data on f
     expect(timestamp.dateTime).toBe('2025-09-01T13:00:00.000Z')
     expect(within(values()).getByText('200.00')).toBeTruthy()
     expect(within(dashboard).getByRole('button', { name: 'Refresh' }).disabled).toBe(false)
+    fail = false
+    invalidStats = true
+    fireEvent.click(within(dashboard).getByRole('button', { name: 'Refresh' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Unable to load league data/)
+    expect(timestamp.dateTime).toBe('2025-09-01T13:00:00.000Z')
+    expect(within(values()).getByText('200.00')).toBeTruthy()
   } finally {
     jest.useRealTimers()
   }
