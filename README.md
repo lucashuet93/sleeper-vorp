@@ -15,6 +15,14 @@ Open the local URL printed by Vite.
 
 Run the test suite with `npm test` and create a production build with `npm run build`.
 
+## Player dashboard
+
+After loading a league, filter players by position and sort by fantasy points,
+VORP, or VORS using the column headings. The replacement-level selector changes
+the VORP baseline; VORS always uses its starter-based baseline. The player
+directory does not include performance data, so values are shown as unavailable
+unless player stats or projections and league settings are supplied.
+
 ## Loading league data
 
 After a user selects a league and season, Continue loads the selected season's
