@@ -19,6 +19,18 @@ test('ranks available player values overall and separately by position', () => {
   expect(result.positionPlayers.TE.vors).toEqual([])
 })
 
+test('ranks per-game player metrics independently of total and team values', () => {
+  const result = calculateSummaryInsights([
+    { ...players[0], vorpPerGame: 1, vorsPerGame: 2 },
+    { ...players[1], vorpPerGame: 4, vorsPerGame: 3 },
+    { ...players[2], vorpPerGame: null, vorsPerGame: null },
+  ], [{ roster_id: 1 }])
+  expect(result.topPlayers.vorpPerGame.map(({ id }) => id)).toEqual(['a-rb', 'a-qb'])
+  expect(result.positionPlayers.QB.vorsPerGame.map(({ id }) => id)).toEqual(['a-qb'])
+  expect(result.topPlayers.vorp[0].id).toBe('a-qb')
+  expect(result.topTeams.vorp[0].vorp).toBe(14)
+})
+
 test('sums team aggregates and finds the strongest positional surplus over league average', () => {
   const result = calculateSummaryInsights(players, [
     { roster_id: 1, owner_id: 'a' },

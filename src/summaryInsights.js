@@ -1,5 +1,6 @@
 const POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K']
 const METRICS = ['vorp', 'vors']
+const PLAYER_METRICS = [...METRICS, 'vorpPerGame', 'vorsPerGame']
 const TOP_COUNT = 3
 
 function rank(entries, metric) {
@@ -94,13 +95,13 @@ export function calculateSummaryInsights(players, rosters = [], users = []) {
 
   return {
     topPlayers: Object.fromEntries(
-      METRICS.map((metric) => [metric, rank(players, metric)]),
+      PLAYER_METRICS.map((metric) => [metric, rank(players, metric)]),
     ),
     positionPlayers: Object.fromEntries(
       POSITIONS.map((position) => [
         position,
         Object.fromEntries(
-          METRICS.map((metric) => [
+          PLAYER_METRICS.map((metric) => [
             metric,
             rank(players.filter((player) => player.position === position), metric),
           ]),
