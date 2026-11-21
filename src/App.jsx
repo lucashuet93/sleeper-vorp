@@ -15,6 +15,7 @@ function App() {
   const [hasSearched, setHasSearched] = useState(false)
   const [leagueData, setLeagueData] = useState(null)
   const [loadingLeague, setLoadingLeague] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState(null)
   const request = useRef({ nonce: 0, controller: null })
 
   function invalidateRequests() {
@@ -24,6 +25,7 @@ function App() {
     setLoading(false)
     setLoadingLeague(false)
     setLeagueData(null)
+    setLastUpdated(null)
     setConfirmedSelection(null)
     setError('')
   }
@@ -75,22 +77,29 @@ function App() {
     }
 
     invalidateRequests()
-    const nonce = request.current.nonce
-    const controller = new AbortController()
-    request.current.controller = controller
     const selection = {
       leagueId: selectedSeasonRecord.league_id,
       leagueName: selectedLeague.name,
       season: selectedSeasonRecord.season,
     }
+    await loadLeague(selection)
+  }
+
+  async function loadLeague(selection) {
+    const nonce = request.current.nonce
+    const controller = new AbortController()
+    request.current.controller = controller
     setLoadingLeague(true)
+    setError('')
     try {
       const data = await fetchLeagueData(selection.leagueId, selection.season, {
         signal: controller.signal,
+        fresh: true,
       })
       if (nonce !== request.current.nonce) return
       setLeagueData(data)
       setConfirmedSelection(selection)
+      setLastUpdated(new Date())
     } catch (requestError) {
       if (nonce !== request.current.nonce) return
       const messages = {
@@ -199,7 +208,12 @@ function App() {
           <p>League: {confirmedSelection.leagueName}</p>
           <p>Season: {confirmedSelection.season}</p>
           <p>League ID: {confirmedSelection.leagueId}</p>
-          <Dashboard leagueData={leagueData} />
+          <Dashboard
+            leagueData={leagueData}
+            onRefresh={() => loadLeague(confirmedSelection)}
+            loading={loadingLeague}
+            lastUpdated={lastUpdated}
+          />
         </>
       )}
     </LeagueDataContext.Provider>

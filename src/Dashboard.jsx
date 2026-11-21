@@ -26,7 +26,7 @@ function RankedTable({ entries, metric, title }) {
   )
 }
 
-function Dashboard({ leagueData }) {
+function Dashboard({ leagueData, onRefresh, loading, lastUpdated }) {
   const [position, setPosition] = useState('All')
   const [method, setMethod] = useState('rank-based')
   const [sort, setSort] = useState({ field: 'vorp', direction: 'desc' })
@@ -96,6 +96,13 @@ function Dashboard({ leagueData }) {
   return (
     <section aria-label="VORP and VORS dashboard">
       <h2>Player dashboard</h2>
+      {onRefresh && (
+        <>
+          <button type="button" onClick={onRefresh} disabled={loading}>Refresh</button>
+          {loading && <p role="status">Refreshing league data…</p>}
+          {lastUpdated && <p>Last updated: <time dateTime={lastUpdated.toISOString()}>{lastUpdated.toLocaleString()}</time></p>}
+        </>
+      )}
       <label htmlFor="replacement-method">Replacement-level method</label>
       <select id="replacement-method" value={method} onChange={(event) => setMethod(event.target.value)}>
         <option value="rank-based">Rank-based</option>

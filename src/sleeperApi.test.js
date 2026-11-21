@@ -73,6 +73,64 @@ test('returns selected league settings, owners, rosters and the labeled player d
   expect(data.players).toBe(data.playerDirectory)
 })
 
+test('fresh loads refetch the directory and season performance without using the shared cache', async () => {
+  let version = 0
+  const fetchImpl = mockApi()
+  const normal = fetchImpl.getMockImplementation()
+  fetchImpl.mockImplementation((url, options) => {
+    if (url.endsWith('/players/nfl')) {
+      version += 1
+      return Promise.resolve(response({ p1: { position: 'QB', full_name: `Player ${version}` } }))
+    }
+    if (url === `https://api.sleeper.com/stats/nfl/${season}?season_type=regular`) {
+      return Promise.resolve(response([{ player_id: 'p1', stats: { pass_td: version } }]))
+    }
+    return normal(url, options)
+  })
+
+  await fetchLeagueData('123', season, { fetchImpl })
+  const first = await fetchLeagueData('123', season, { fetchImpl, fresh: true })
+  const second = await fetchLeagueData('123', season, { fetchImpl, fresh: true })
+  expect(first.players.p1).toMatchObject({ full_name: 'Player 2', stats: { pass_td: 2 }, rosterStatus: 'rostered' })
+  expect(second.players.p1).toMatchObject({ full_name: 'Player 3', stats: { pass_td: 3 } })
+  expect(second.playerDirectory).toBe(second.players)
+  expect(fetchImpl.mock.calls.filter(([url]) => url.includes('/stats/nfl/'))).toHaveLength(2)
+})
+
+test('a failed or invalid season statistics response fails the fresh load', async () => {
+  for (const result of [
+    response(null, 503),
+    response({ invalid: true }),
+    response([{ message: 'unavailable' }]),
+    response([{ player_id: 'p1', stats: { pass_yd: 'invalid' } }]),
+    response([{ player_id: 'unknown', stats: { pass_yd: 100 } }]),
+    response([{ player_id: 'p1', stats: { pass_yd: null, pass_td: '0' } }]),
+    response([{ player_id: 'p1', stats: { pass_yd: 100 } }, { player_id: 'p1', stats: {} }]),
+  ]) {
+    const fetchImpl = mockApi()
+    const normal = fetchImpl.getMockImplementation()
+    fetchImpl.mockImplementation((url, options) => url.includes('/stats/nfl/')
+      ? Promise.resolve(result)
+      : normal(url, options))
+    await expect(fetchLeagueData('123', season, { fetchImpl, fresh: true })).rejects.toThrow('request_failed')
+  }
+})
+
+test('fresh loads accept empty statistics and finite statistics for a matching player', async () => {
+  for (const performance of [
+    [],
+    [{ player_id: 'unknown', stats: { pass_yd: 'invalid' } }, { player_id: 'p1', stats: { pass_yd: 0 } }],
+  ]) {
+    const fetchImpl = mockApi()
+    const normal = fetchImpl.getMockImplementation()
+    fetchImpl.mockImplementation((url, options) => url.includes('/stats/nfl/')
+      ? Promise.resolve(response(performance))
+      : normal(url, options))
+    const data = await fetchLeagueData('123', season, { fetchImpl, fresh: true })
+    if (performance.length) expect(data.players.p1.stats).toEqual({ pass_yd: 0 })
+  }
+})
+
 test('labels rostered players with their owner and marks all other players as free agents', async () => {
   const owner = { user_id: 'owner-1', display_name: 'Team Owner' }
   const fetchImpl = mockApi({

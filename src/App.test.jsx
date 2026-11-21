@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import App from './App.jsx'
 import * as sleeperApi from './sleeperApi.js'
 
@@ -16,6 +16,97 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.restoreAllMocks()
+})
+
+test('loads and refreshes the dashboard, retaining the last successful data on failure', async () => {
+  jest.useFakeTimers({ doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
+  jest.setSystemTime(new Date('2025-09-01T12:00:00Z'))
+  try {
+    const season = '2025'
+    let version = 1
+    let finishRefresh
+    let pending = false
+    let fail = false
+    let invalidStats = null
+    global.fetch.mockImplementation((url) => {
+      if (url.endsWith('/user/fan')) return Promise.resolve(response({ user_id: 'u' }))
+      if (url.includes('/leagues/nfl/')) return Promise.resolve(response(url.endsWith(season)
+        ? [{ league_id: '123', name: 'League', season }] : []))
+      if (url.endsWith('/league/123')) {
+        if (fail) return Promise.resolve(response(null, 503))
+        if (pending) return new Promise((resolve) => { finishRefresh = () => resolve(response({
+          league_id: '123', season, total_rosters: 1, roster_positions: ['QB'], scoring_settings: { pass_yd: 1 },
+        })) })
+        return Promise.resolve(response({ league_id: '123', season, total_rosters: 1, roster_positions: ['QB'], scoring_settings: { pass_yd: 1 } }))
+      }
+      if (url.endsWith('/state/nfl')) return Promise.resolve(response({ season }))
+      if (url.endsWith('/users')) return Promise.resolve(response([{ user_id: 'u', display_name: 'Team' }]))
+      if (url.endsWith('/rosters')) return Promise.resolve(response([{ roster_id: 1, owner_id: 'u', players: ['p1'] }]))
+      if (url.endsWith('/players/nfl')) return Promise.resolve(response({
+        p1: { position: 'QB', full_name: 'First QB' },
+        p2: { position: 'QB', full_name: 'Second QB' },
+      }))
+      if (url.includes('/stats/nfl/')) return Promise.resolve(response(invalidStats ?? [
+        { player_id: 'p1', stats: { pass_yd: version === 1 ? 100 : 200 } },
+        { player_id: 'p2', stats: { pass_yd: 50 } },
+      ]))
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    render(<App />)
+    fireEvent.change(screen.getByLabelText('Sleeper username'), { target: { value: 'fan' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Find leagues' }))
+    fireEvent.change(await screen.findByLabelText('League'), { target: { value: '123' } })
+    fireEvent.change(screen.getByLabelText('Season'), { target: { value: season } })
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    const dashboard = await screen.findByRole('region', { name: 'VORP and VORS dashboard' })
+    const values = () => within(dashboard).getByRole('table', { name: 'Player values' })
+    expect(within(values()).getByText('100.00')).toBeTruthy()
+    expect(global.fetch.mock.calls.filter(([url]) => url.includes('/stats/nfl/'))).toHaveLength(1)
+    const timestamp = dashboard.querySelector('time')
+    expect(timestamp.dateTime).toBe('2025-09-01T12:00:00.000Z')
+    fireEvent.click(within(dashboard).getByRole('button', { name: 'QB' }))
+    fireEvent.change(within(dashboard).getByLabelText('Replacement-level method'), { target: { value: 'free-agent' } })
+    fireEvent.click(within(dashboard).getByRole('button', { name: 'Fantasy points' }))
+
+    version = 2
+    pending = true
+    jest.setSystemTime(new Date('2025-09-01T13:00:00Z'))
+    fireEvent.click(within(dashboard).getByRole('button', { name: 'Refresh' }))
+    expect(within(dashboard).getByRole('button', { name: 'Refresh' }).disabled).toBe(true)
+    expect(within(dashboard).getByRole('status').textContent).toMatch(/Refreshing/)
+    await act(async () => finishRefresh())
+    await waitFor(() => expect(within(values()).getByText('200.00')).toBeTruthy())
+    expect(timestamp.dateTime).toBe('2025-09-01T13:00:00.000Z')
+    expect(within(dashboard).getByRole('button', { name: 'QB' }).getAttribute('aria-pressed')).toBe('true')
+    expect(within(dashboard).getByLabelText('Replacement-level method').value).toBe('free-agent')
+    expect(within(values()).getByRole('columnheader', { name: 'Fantasy points' }).getAttribute('aria-sort')).toBe('descending')
+    expect(within(within(dashboard).getByRole('table', { name: 'Top players overall by VORP' })).getByText('150.00')).toBeTruthy()
+    expect(global.fetch.mock.calls.filter(([url]) => url.endsWith('/players/nfl'))).toHaveLength(2)
+    expect(global.fetch.mock.calls.filter(([url]) => url.includes('/stats/nfl/'))).toHaveLength(2)
+
+    pending = false
+    fail = true
+    jest.setSystemTime(new Date('2025-09-01T14:00:00Z'))
+    fireEvent.click(within(dashboard).getByRole('button', { name: 'Refresh' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Unable to load league data/)
+    expect(timestamp.dateTime).toBe('2025-09-01T13:00:00.000Z')
+    expect(within(values()).getByText('200.00')).toBeTruthy()
+    expect(within(dashboard).getByRole('button', { name: 'Refresh' }).disabled).toBe(false)
+    fail = false
+    for (const stats of [
+      [{ message: 'unavailable' }],
+      [{ player_id: 'p1', stats: { pass_yd: 'invalid' } }],
+      [{ player_id: 'unknown', stats: { pass_yd: 100 } }],
+    ]) {
+      invalidStats = stats
+      fireEvent.click(within(dashboard).getByRole('button', { name: 'Refresh' }))
+      expect((await screen.findByRole('alert')).textContent).toMatch(/Unable to load league data/)
+      expect(timestamp.dateTime).toBe('2025-09-01T13:00:00.000Z')
+      expect(within(values()).getByText('200.00')).toBeTruthy()
+    }
+  } finally {
+    jest.useRealTimers()
+  }
 })
 
 test('finds leagues, lets the user choose a season, and confirms the selection', async () => {
