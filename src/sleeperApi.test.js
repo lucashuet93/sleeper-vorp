@@ -98,13 +98,36 @@ test('fresh loads refetch the directory and season performance without using the
 })
 
 test('a failed or invalid season statistics response fails the fresh load', async () => {
-  for (const result of [response(null, 503), response({ invalid: true }), response([{ message: 'unavailable' }])]) {
+  for (const result of [
+    response(null, 503),
+    response({ invalid: true }),
+    response([{ message: 'unavailable' }]),
+    response([{ player_id: 'p1', stats: { pass_yd: 'invalid' } }]),
+    response([{ player_id: 'unknown', stats: { pass_yd: 100 } }]),
+    response([{ player_id: 'p1', stats: { pass_yd: null, pass_td: '0' } }]),
+    response([{ player_id: 'p1', stats: { pass_yd: 100 } }, { player_id: 'p1', stats: {} }]),
+  ]) {
     const fetchImpl = mockApi()
     const normal = fetchImpl.getMockImplementation()
     fetchImpl.mockImplementation((url, options) => url.includes('/stats/nfl/')
       ? Promise.resolve(result)
       : normal(url, options))
     await expect(fetchLeagueData('123', season, { fetchImpl, fresh: true })).rejects.toThrow('request_failed')
+  }
+})
+
+test('fresh loads accept empty statistics and finite statistics for a matching player', async () => {
+  for (const performance of [
+    [],
+    [{ player_id: 'unknown', stats: { pass_yd: 'invalid' } }, { player_id: 'p1', stats: { pass_yd: 0 } }],
+  ]) {
+    const fetchImpl = mockApi()
+    const normal = fetchImpl.getMockImplementation()
+    fetchImpl.mockImplementation((url, options) => url.includes('/stats/nfl/')
+      ? Promise.resolve(response(performance))
+      : normal(url, options))
+    const data = await fetchLeagueData('123', season, { fetchImpl, fresh: true })
+    if (performance.length) expect(data.players.p1.stats).toEqual({ pass_yd: 0 })
   }
 })
 

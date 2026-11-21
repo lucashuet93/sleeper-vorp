@@ -210,7 +210,9 @@ export async function fetchLeagueData(leagueId, season, { fetchImpl = fetch, sig
     .filter((entry) => entry?.player_id != null && entry.stats &&
       typeof entry.stats === 'object' && !Array.isArray(entry.stats))
     .map((entry) => [String(entry.player_id), entry.stats]))
-  if (performance?.length > 0 && statsByPlayer.size === 0) throw requestError('request_failed')
+  if (performance?.length > 0 && ![...statsByPlayer].some(([id, stats]) =>
+    Object.hasOwn(players, id) && Object.values(stats).some(Number.isFinite),
+  )) throw requestError('request_failed')
   const labeledPlayers = labelPlayersByRoster(players, rosters, users)
   for (const [id, player] of Object.entries(labeledPlayers)) {
     if (statsByPlayer.has(id)) player.stats = statsByPlayer.get(id)
