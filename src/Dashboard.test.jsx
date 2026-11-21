@@ -76,3 +76,12 @@ test('does not display fabricated scores when league settings are unavailable', 
   expect(row('Quarterback One').getAllByText('—')).toHaveLength(3)
   expect(screen.getByText(/unavailable without player performance data/)).toBeTruthy()
 })
+
+test.each([[], undefined])('does not display fabricated scores without roster settings (%s)', (rosterSettings) => {
+  render(<Dashboard leagueData={{ ...leagueData, rosterSettings }} />)
+  expect(row('Quarterback One').getAllByText('—')).toHaveLength(3)
+  expect(screen.getByText(/unavailable without player performance data/)).toBeTruthy()
+
+  fireEvent.change(screen.getByLabelText('Replacement-level method'), { target: { value: 'free-agent' } })
+  expect(row('Quarterback One').getAllByText('—')).toHaveLength(3)
+})

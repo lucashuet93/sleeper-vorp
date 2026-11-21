@@ -14,7 +14,7 @@ function Dashboard({ leagueData }) {
     const rosterSettings = leagueData.rosterSettings
     const scoringSettings = leagueData.scoringSettings
     const totalRosters = leagueData.league?.total_rosters
-    const canCalculate = Array.isArray(rosterSettings) &&
+    const canCalculate = Array.isArray(rosterSettings) && rosterSettings.length > 0 &&
       scoringSettings && typeof scoringSettings === 'object' &&
       Object.keys(scoringSettings).length > 0 &&
       Number.isInteger(totalRosters) && totalRosters > 0
